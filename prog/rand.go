@@ -17,10 +17,10 @@ import (
 
 const (
 	// "Recommended" number of calls in programs that we try to aim at during fuzzing.
-	RecommendedCalls = 20
+	RecommendedCalls = 1
 	// "Recommended" max number of calls in programs.
 	// If we receive longer programs from hub/corpus we discard them.
-	MaxCalls = 40
+	MaxCalls = 1
 )
 
 type randGen struct {
@@ -182,70 +182,39 @@ func (r *randGen) randPageCount() (n uint64) {
 // Change a flag value or generate a new one.
 // If you are changing this function, run TestFlags and examine effect of results.
 func (r *randGen) flags(vv []uint64, bitmask bool, oldVal uint64) uint64 {
-	// Get these simpler cases out of the way first.
-	// Once in a while we want to return completely random values,
-	// or 0 which is frequently special.
-	if r.oneOf(100) {
-		return r.rand64()
-	}
-	if r.oneOf(50) {
-		return 0
-	}
-	if !bitmask && oldVal != 0 && r.oneOf(100) {
-		// Slightly increment/decrement the old value.
-		// This is especially important during mutation when len(vv) == 1,
-		// otherwise in that case we produce almost no randomness
-		// (the value is always mutated to 0).
-		inc := uint64(1)
-		if r.bin() {
-			inc = ^uint64(0)
-		}
-		v := oldVal + inc
-		for r.bin() {
-			v += inc
-		}
-		return v
-	}
+	// // Get these simpler cases out of the way first.
+	// // Once in a while we want to return completely random values,
+	// // or 0 which is frequently special.
+	// if r.oneOf(100) {
+	// 	return r.rand64()
+	// }
+	// if r.oneOf(50) {
+	// 	return 0
+	// }
+	// if !bitmask && oldVal != 0 && r.oneOf(100) {
+	// 	// Slightly increment/decrement the old value.
+	// 	// This is especially important during mutation when len(vv) == 1,
+	// 	// otherwise in that case we produce almost no randomness
+	// 	// (the value is always mutated to 0).
+	// 	inc := uint64(1)
+	// 	if r.bin() {
+	// 		inc = ^uint64(0)
+	// 	}
+	// 	v := oldVal + inc
+	// 	for r.bin() {
+	// 		v += inc
+	// 	}
+	// 	return v
+	// }
 	if len(vv) == 1 {
-		// This usually means that value or 0,
-		// at least that's our best (and only) bet.
-		if r.bin() {
-			return 0
-		}
+		// // This usually means that value or 0,
+		// // at least that's our best (and only) bet.
+		// if r.bin() {
+		// 	return 0
+		// }
 		return vv[0]
 	}
-	if !bitmask && !r.oneOf(10) {
-		// Enumeration, so just choose one of the values.
-		return vv[r.rand(len(vv))]
-	}
-	if r.oneOf(len(vv) + 4) {
-		return 0
-	}
-	// Flip rand bits. Do this for non-bitmask sometimes
-	// because we may have detected bitmask incorrectly for complex cases
-	// (e.g. part of the vlaue is bitmask and another is not).
-	v := oldVal
-	if v != 0 && r.oneOf(10) {
-		v = 0 // Ignore the old value sometimes.
-	}
-	// We don't want to return 0 here, because we already given 0
-	// fixed probability above (otherwise we get 0 too frequently).
-	// Note: this loop can hang if all values are equal to 0. We don't generate such flags in the compiler now,
-	// but it used to hang occasionally, so we keep the try < 10 logic b/c we don't have a local check for values.
-	for try := 0; try < 10 && (v == 0 || r.nOutOf(2, 3)); try++ {
-		flag := vv[r.rand(len(vv))]
-		if r.oneOf(20) {
-			// Try choosing adjacent bit values in case we forgot
-			// to add all relevant flags to the descriptions.
-			if r.bin() {
-				flag >>= 1
-			} else {
-				flag <<= 1
-			}
-		}
-		v ^= flag
-	}
-	return v
+	return vv[r.rand(len(vv))]
 }
 
 func (r *randGen) filename(s *state, typ *BufferType) string {
@@ -807,10 +776,10 @@ func (a *UnionType) generate(r *randGen, s *state, dir Dir) (arg Arg, calls []*C
 }
 
 func (a *PtrType) generate(r *randGen, s *state, dir Dir) (arg Arg, calls []*Call) {
-	if r.oneOf(1000) {
-		index := r.rand(len(r.target.SpecialPointers))
-		return MakeSpecialPointerArg(a, dir, index), nil
-	}
+	// if r.oneOf(1000) {
+	// 	index := r.rand(len(r.target.SpecialPointers))
+	// 	return MakeSpecialPointerArg(a, dir, index), nil
+	// }
 	inner, calls := r.generateArg(s, a.Elem, a.ElemDir)
 	arg = r.allocAddr(s, a, dir, inner.Size(), inner)
 	return arg, calls
