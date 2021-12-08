@@ -69,6 +69,8 @@ func Run(crashLog []byte, cfg *mgrconfig.Config, features *host.Features, report
 		return nil, nil, fmt.Errorf("no VMs provided")
 	}
 	entries := cfg.Target.ParseLog(crashLog)
+	entries = entries[len(entries)-1:]
+	// tmpLog(*entries[0].P)
 	if len(entries) == 0 {
 		return nil, nil, fmt.Errorf("crash log does not contain any programs")
 	}
@@ -263,32 +265,32 @@ func (ctx *context) repro(entries []*prog.LogEntry, crashStart int) (*Result, er
 			res.Opts.Repro = false
 		}
 	}()
-	res, err = ctx.minimizeProg(res)
-	if err != nil {
-		return nil, err
-	}
+	// res, err = ctx.minimizeProg(res)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	// Try extracting C repro without simplifying options first.
-	res, err = ctx.extractC(res)
-	if err != nil {
-		return nil, err
-	}
+	// res, err = ctx.extractC(res)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	// Simplify options and try extracting C repro.
-	if !res.CRepro {
-		res, err = ctx.simplifyProg(res)
-		if err != nil {
-			return nil, err
-		}
-	}
+	// if !res.CRepro {
+	// 	res, err = ctx.simplifyProg(res)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	// Simplify C related options.
-	if res.CRepro {
-		res, err = ctx.simplifyC(res)
-		if err != nil {
-			return nil, err
-		}
-	}
+	// if res.CRepro {
+	// 	res, err = ctx.simplifyC(res)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	return res, nil
 }

@@ -170,6 +170,8 @@ func (ctx *Context) execute(pid int, env *ipc.Env, entry *prog.LogEntry) {
 			log.Logf(1, "executor failed, retrying")
 			time.Sleep(time.Second)
 			continue
+		} else if err != nil {
+			log.Fatalf("execprog detected: %v", err)
 		}
 		if ctx.config.Flags&ipc.FlagDebug != 0 || err != nil {
 			log.Logf(0, "result: hanged=%v err=%v\n\n%s", hanged, err, output)
