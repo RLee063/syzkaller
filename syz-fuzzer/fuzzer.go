@@ -380,6 +380,8 @@ func (fuzzer *Fuzzer) pollLoop() {
 			for _, proc := range fuzzer.procs {
 				stats["exec total"] += atomic.SwapUint64(&proc.env.StatExecs, 0)
 				stats["executor restarts"] += atomic.SwapUint64(&proc.env.StatRestarts, 0)
+				stats["valid total"] += atomic.SwapUint64(&proc.env.StatValid, 0)
+				stats["invalid total"] += atomic.SwapUint64(&proc.env.StatInvalid, 0)
 			}
 			for stat := Stat(0); stat < StatCount; stat++ {
 				v := atomic.SwapUint64(&fuzzer.stats[stat], 0)

@@ -250,6 +250,7 @@ struct thread_t {
 	bool fault_injected;
 	cover_t cov;
 	bool soft_fail_state;
+	char *log_buf;
 	int  sys_nr;
 };
 
@@ -1047,6 +1048,7 @@ void write_call_output(thread_t* th, bool finished)
 	uint32* signal_count_pos = write_output(0); // filled in later
 	uint32* cover_count_pos = write_output(0); // filled in later
 	uint32* comps_count_pos = write_output(0); // filled in later
+	uint32* log_count_pos 	= write_output(0);
 
 	if (flag_comparisons) {
 		// Collect only the comparisons
@@ -1074,6 +1076,16 @@ void write_call_output(thread_t* th, bool finished)
 		else
 			write_coverage_signal<uint32>(&th->cov, signal_count_pos, cover_count_pos);
 	}
+
+	if ( th->sys_nr == __NR_bpf && th->log_buf){
+		uint32 log_len = strlen(th->log_buf);
+		uint32 *log_ptr = (uint32 *)th->log_buf;
+		for (uint32 i=0; i<=log_len/sizeof(uint32); i++){
+			write_output(log_ptr[i]);
+			*log_count_pos += 4;
+		}
+	}
+
 	debug_verbose("out #%u: index=%u num=%u errno=%d finished=%d blocked=%d sig=%u cover=%u comps=%u\n",
 		      completed, th->call_index, th->call_num, reserrno, finished, blocked,
 		      *signal_count_pos, *cover_count_pos, *comps_count_pos);
@@ -1179,6 +1191,7 @@ void execute_call(thread_t* th)
 	union bpf_attr* attrs;
 	if (call->sys_nr == __NR_bpf){
 		attrs = (union bpf_attr* )th->args[1];
+		th->log_buf = (char *)attrs->log_buf;
 		if (reset_ebpf_maps() < 0){
 			fail("[-] reset maps error\n");
 		}else{

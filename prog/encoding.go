@@ -23,6 +23,27 @@ func (p *Prog) String() string {
 	return buf.String()
 }
 
+func (p *Prog) SerializeHex() []byte {
+	var buf []byte
+	complexPtrs := p.complexPtrs()
+	if len(complexPtrs) == 0 {
+		return buf
+	}
+	ptr := complexPtrs[0]
+	if !p.Target.isAnyPtr(ptr.Type()) {
+		p.Target.squashPtr(ptr)
+	}
+	var blobs []*DataArg
+	var bases []*PointerArg
+	ForeachSubArg(ptr, func(arg Arg, ctx *ArgCtx) {
+		if data, ok := arg.(*DataArg); ok && arg.Dir() != DirOut {
+			blobs = append(blobs, data)
+			bases = append(bases, ctx.Base)
+		}
+	})
+	return blobs[0].data
+}
+
 func (p *Prog) Serialize() []byte {
 	return p.serialize(false)
 }
