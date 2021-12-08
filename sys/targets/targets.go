@@ -704,9 +704,9 @@ func (target *Target) Timeouts(slowdown int) Timeouts {
 	timeouts := target.timeouts
 	timeouts.Slowdown = slowdown
 	timeouts.Scale = time.Duration(slowdown)
-	if timeouts.Scale > 3 {
-		timeouts.Scale = 3
-	}
+	// if timeouts.Scale > 3 {
+	// 	timeouts.Scale = 3
+	// }
 	if timeouts.Syscall == 0 {
 		timeouts.Syscall = 50 * time.Millisecond
 	}

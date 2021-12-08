@@ -19,6 +19,7 @@ var (
 	flagSandbox  = flag.String("sandbox", "none", "sandbox for fuzzing (none/setuid/namespace/android)")
 	flagDebug    = flag.Bool("debug", false, "debug output from executor")
 	flagSlowdown = flag.Int("slowdown", 1, "execution slowdown caused by emulation/instrumentation")
+	flagDebugE   = flag.Bool("debugE", false, "debug executor use gdbserver")
 )
 
 func Default(target *prog.Target) (*ipc.Config, *ipc.ExecOpts, error) {
@@ -49,6 +50,8 @@ func Default(target *prog.Target) (*ipc.Config, *ipc.ExecOpts, error) {
 	if *flagCollide {
 		opts.Flags |= ipc.FlagCollide
 	}
-
+	if *flagDebugE {
+		c.DebugExecutor = true
+	}
 	return c, opts, nil
 }

@@ -82,31 +82,35 @@ type Pool struct {
 }
 
 type instance struct {
-	index       int
-	cfg         *Config
-	target      *targets.Target
-	archConfig  *archConfig
-	version     string
-	args        []string
-	image       string
-	debug       bool
-	os          string
-	workdir     string
-	sshkey      string
-	sshuser     string
-	timeouts    targets.Timeouts
-	port        int
-	monport     int
-	forwardPort int
-	mon         net.Conn
-	monEnc      *json.Encoder
-	monDec      *json.Decoder
-	rpipe       io.ReadCloser
-	wpipe       io.WriteCloser
-	qemu        *exec.Cmd
-	merger      *vmimpl.OutputMerger
-	files       map[string]string
-	diagnose    chan bool
+	index         int
+	cfg           *Config
+	target        *targets.Target
+	archConfig    *archConfig
+	version       string
+	args          []string
+	image         string
+	debug         bool
+	os            string
+	workdir       string
+	sshkey        string
+	sshuser       string
+	timeouts      targets.Timeouts
+	port          int
+	monport       int
+	forwardPort   int
+	mon           net.Conn
+	monEnc        *json.Encoder
+	monDec        *json.Decoder
+	rpipe         io.ReadCloser
+	wpipe         io.WriteCloser
+	qemu          *exec.Cmd
+	merger        *vmimpl.OutputMerger
+	files         map[string]string
+	diagnose      chan bool
+	debugFuzzer   bool
+	debugExecutor bool
+	DebugExecprog bool
+	debugKernel   bool
 }
 
 type archConfig struct {
@@ -339,19 +343,23 @@ func (pool *Pool) Create(workdir string, index int) (vmimpl.Instance, error) {
 
 func (pool *Pool) ctor(workdir, sshkey, sshuser string, index int) (vmimpl.Instance, error) {
 	inst := &instance{
-		index:      index,
-		cfg:        pool.cfg,
-		target:     pool.target,
-		archConfig: pool.archConfig,
-		version:    pool.version,
-		image:      pool.env.Image,
-		debug:      pool.env.Debug,
-		os:         pool.env.OS,
-		timeouts:   pool.env.Timeouts,
-		workdir:    workdir,
-		sshkey:     sshkey,
-		sshuser:    sshuser,
-		diagnose:   make(chan bool, 1),
+		index:         index,
+		cfg:           pool.cfg,
+		target:        pool.target,
+		archConfig:    pool.archConfig,
+		version:       pool.version,
+		image:         pool.env.Image,
+		debug:         pool.env.Debug,
+		os:            pool.env.OS,
+		timeouts:      pool.env.Timeouts,
+		workdir:       workdir,
+		sshkey:        sshkey,
+		sshuser:       sshuser,
+		diagnose:      make(chan bool, 1),
+		debugFuzzer:   pool.env.DebugFuzzer,
+		DebugExecprog: pool.env.DebugExecprog,
+		debugExecutor: pool.env.DebugExecutor,
+		debugKernel:   pool.env.DebugKernel,
 	}
 	if st, err := os.Stat(inst.image); err != nil && st.Size() == 0 {
 		// Some kernels may not need an image, however caller may still
@@ -417,9 +425,20 @@ func (inst *instance) boot() error {
 	}
 	templateDir := filepath.Join(inst.workdir, "template")
 	args = append(args, splitArgs(inst.cfg.QemuArgs, templateDir, inst.index)...)
+
+	append_cmd := ""
+	if inst.debugFuzzer {
+		append_cmd += ",hostfwd=tcp:127.0.0.1:23451-:23451"
+	}
+	if inst.debugExecutor {
+		append_cmd += ",hostfwd=tcp:127.0.0.1:23452-:23452"
+	}
+	if inst.DebugExecprog {
+		append_cmd += ",hostfwd=tcp:127.0.0.1:23453-:23453"
+	}
 	args = append(args,
 		"-device", inst.cfg.NetDev+",netdev=net0",
-		"-netdev", fmt.Sprintf("user,id=net0,restrict=on,hostfwd=tcp:127.0.0.1:%v-:22", inst.port))
+		"-netdev", fmt.Sprintf("user,id=net0,restrict=on,hostfwd=tcp:127.0.0.1:%v-:22"+append_cmd, inst.port))
 	if inst.image == "9p" {
 		args = append(args,
 			"-fsdev", "local,id=fsdev0,path=/,security_model=none,readonly",

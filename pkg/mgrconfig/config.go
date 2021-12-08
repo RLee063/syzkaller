@@ -156,6 +156,13 @@ type Config struct {
 
 	// Implementation details beyond this point. Filled after parsing.
 	Derived `json:"-"`
+
+	// Debug fuzzer
+	Slowdown      bool `json:"slowdown"`
+	DebugFuzzer   bool `json:"debug_fuzzer"`
+	DebugExecutor bool `json:"debug_executor"`
+	DebugKernel   bool `json:"debug_kernel"`
+	DebugExecprog bool `json:"debug_execprog"`
 }
 
 type Subsystem struct {

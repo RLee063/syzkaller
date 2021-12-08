@@ -74,7 +74,8 @@ type Config struct {
 	// Flags are configuation flags, defined above.
 	Flags EnvFlags
 
-	Timeouts targets.Timeouts
+	Timeouts      targets.Timeouts
+	DebugExecutor bool
 }
 
 type CallFlags uint32
@@ -596,6 +597,10 @@ func makeCommand(pid int, bin []string, config *Config, inFile, outFile *os.File
 
 	c.readDone = make(chan []byte, 1)
 	c.exited = make(chan struct{})
+
+	if config.DebugExecutor {
+		bin = append([]string{"gdbserver", ":23452"}, bin...)
+	}
 
 	cmd := osutil.Command(bin[0], bin[1:]...)
 	if inFile != nil && outFile != nil {

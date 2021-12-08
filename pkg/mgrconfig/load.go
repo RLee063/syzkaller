@@ -189,6 +189,9 @@ func (cfg *Config) initTimeouts() {
 		// Note: the name check is a hack.
 		slowdown = 10
 	}
+	if cfg.DebugFuzzer || cfg.DebugExecutor || cfg.DebugExecprog || cfg.Slowdown {
+		slowdown = 10000
+	}
 	// Note: we could also consider heavy debug tools (KASAN/KMSAN/KCSAN/KMEMLEAK) if necessary.
 	cfg.Timeouts = cfg.SysTarget.Timeouts(slowdown)
 }

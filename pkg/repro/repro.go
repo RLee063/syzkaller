@@ -625,9 +625,19 @@ func (ctx *context) testProgs(entries []*prog.LogEntry, duration time.Duration, 
 		program += "]"
 	}
 
-	command := instancePkg.ExecprogCmd(inst.execprogBin, inst.executorBin,
+	command := instancePkg.ExecprogCmd("", inst.executorBin,
 		ctx.target.OS, ctx.target.Arch, opts.Sandbox, opts.Repeat,
 		opts.Threaded, opts.Collide, opts.Procs, -1, -1, true, ctx.timeouts.Slowdown, vmProgFile)
+
+	if opts.DebugExecutor {
+		command = " -debugE=true " + command
+	}
+	command = inst.execprogBin + " " + command
+	if opts.DebugExecprog {
+		command = "dlv --listen=\":23453\" --headless=true --log --api-version=2 exec -- " + command
+	}
+
+	command = command + " " + vmProgFile
 	ctx.reproLogf(2, "testing program (duration=%v, %+v): %s", duration, opts, program)
 	ctx.reproLogf(3, "detailed listing:\n%s", pstr)
 	return ctx.testImpl(inst.Instance, command, duration)

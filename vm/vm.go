@@ -77,16 +77,20 @@ func Create(cfg *mgrconfig.Config, debug bool) (*Pool, error) {
 		return nil, fmt.Errorf("unknown instance type '%v'", cfg.Type)
 	}
 	env := &vmimpl.Env{
-		Name:     cfg.Name,
-		OS:       cfg.TargetOS,
-		Arch:     cfg.TargetVMArch,
-		Workdir:  cfg.Workdir,
-		Image:    cfg.Image,
-		SSHKey:   cfg.SSHKey,
-		SSHUser:  cfg.SSHUser,
-		Timeouts: cfg.Timeouts,
-		Debug:    debug,
-		Config:   cfg.VM,
+		Name:          cfg.Name,
+		OS:            cfg.TargetOS,
+		Arch:          cfg.TargetVMArch,
+		Workdir:       cfg.Workdir,
+		Image:         cfg.Image,
+		SSHKey:        cfg.SSHKey,
+		SSHUser:       cfg.SSHUser,
+		Timeouts:      cfg.Timeouts,
+		Debug:         debug,
+		Config:        cfg.VM,
+		DebugFuzzer:   cfg.DebugFuzzer,
+		DebugExecutor: cfg.DebugExecutor,
+		DebugKernel:   cfg.DebugKernel,
+		DebugExecprog: cfg.DebugExecprog,
 	}
 	impl, err := typ.Ctor(env)
 	if err != nil {

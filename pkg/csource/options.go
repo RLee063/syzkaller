@@ -54,6 +54,9 @@ type Options struct {
 	// which allows to detect hangs.
 	Repro bool `json:"repro,omitempty"`
 	Trace bool `json:"trace,omitempty"`
+
+	DebugExecprog bool
+	DebugExecutor bool
 }
 
 // Check checks if the opts combination is valid or not.
@@ -153,15 +156,17 @@ func (opts Options) checkLinuxOnly(OS string) error {
 
 func DefaultOpts(cfg *mgrconfig.Config) Options {
 	opts := Options{
-		Threaded:   true,
-		Collide:    true,
-		Repeat:     true,
-		Procs:      cfg.Procs,
-		Slowdown:   cfg.Timeouts.Slowdown,
-		Sandbox:    cfg.Sandbox,
-		UseTmpDir:  true,
-		HandleSegv: true,
-		Repro:      true,
+		Threaded:      true,
+		Collide:       true,
+		Repeat:        true,
+		Procs:         cfg.Procs,
+		Slowdown:      cfg.Timeouts.Slowdown,
+		Sandbox:       cfg.Sandbox,
+		UseTmpDir:     true,
+		HandleSegv:    true,
+		Repro:         true,
+		DebugExecutor: cfg.DebugExecutor,
+		DebugExecprog: cfg.DebugExecprog,
 	}
 	if cfg.TargetOS == targets.Linux {
 		opts.NetInjection = true
