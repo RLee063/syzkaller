@@ -60,6 +60,8 @@ type RPCManagerView interface {
 		[]rpctype.RPCInput, BugFrames, map[uint32]uint32, []byte, error)
 	machineChecked(result *rpctype.CheckArgs, enabledSyscalls map[*prog.Syscall]bool)
 	newInput(inp rpctype.RPCInput, sign signal.Signal) bool
+	newInvalidReason(uint32, []byte)
+	newBPFCrash(string, []byte)
 	candidateBatch(size int) []rpctype.RPCCandidate
 	rotateCorpus() bool
 }
@@ -243,6 +245,16 @@ func (serv *RPCServer) Check(a *rpctype.CheckArgs, r *int) error {
 	a.DisabledCalls = nil
 	serv.checkResult = a
 	serv.rotator = prog.MakeRotator(serv.cfg.Target, serv.targetEnabledSyscalls, serv.rnd)
+	return nil
+}
+
+func (serv *RPCServer) NewInvalidReason(a *rpctype.NewInvalidReasonArgs, r *int) error {
+	serv.mgr.newInvalidReason(a.Errno, a.Log)
+	return nil
+}
+
+func (serv *RPCServer) NewBPFCrash(a *rpctype.NewBPFCrashArgs, r *int) error {
+	serv.mgr.newBPFCrash(a.Name, a.Log)
 	return nil
 }
 

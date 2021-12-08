@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -92,6 +93,12 @@ type Manager struct {
 	coverFilter        map[uint32]uint32
 	coverFilterBitmap  []byte
 	modulesInitialized bool
+
+	invalidReasons map[string]rpctype.RPCInvalidReasonDetail
+	bpfCrashes     []struct {
+		Name string
+		Log  []byte
+	}
 }
 
 const (
@@ -163,6 +170,7 @@ func RunManager(cfg *mgrconfig.Config) {
 		stats:            &Stats{haveHub: cfg.HubClient != ""},
 		crashTypes:       make(map[string]bool),
 		corpus:           make(map[string]rpctype.RPCInput),
+		invalidReasons:   make(map[string]rpctype.RPCInvalidReasonDetail),
 		disabledHashes:   make(map[string]struct{}),
 		memoryLeakFrames: make(map[string]bool),
 		dataRaceFrames:   make(map[string]bool),
@@ -206,6 +214,8 @@ func RunManager(cfg *mgrconfig.Config) {
 			}
 			mgr.fuzzingTime += diff * time.Duration(atomic.LoadUint32(&mgr.numFuzzing))
 			executed := mgr.stats.execTotal.get()
+			valid := mgr.stats.validTotal.get()
+			invalid := mgr.stats.invalidTotal.get()
 			crashes := mgr.stats.crashes.get()
 			corpusCover := mgr.stats.corpusCover.get()
 			corpusSignal := mgr.stats.corpusSignal.get()
@@ -214,8 +224,8 @@ func RunManager(cfg *mgrconfig.Config) {
 			numReproducing := atomic.LoadUint32(&mgr.numReproducing)
 			numFuzzing := atomic.LoadUint32(&mgr.numFuzzing)
 
-			log.Logf(0, "VMs %v, executed %v, cover %v, signal %v/%v, crashes %v, repro %v",
-				numFuzzing, executed, corpusCover, corpusSignal, maxSignal, crashes, numReproducing)
+			log.Logf(0, "VMs %v, executed %v, valid %v, invalid %v, cover %v, signal %v/%v, crashes %v, repro %v",
+				numFuzzing, executed, valid, invalid, corpusCover, corpusSignal, maxSignal, crashes, numReproducing)
 		}
 	}()
 
@@ -1101,6 +1111,60 @@ func (mgr *Manager) machineChecked(a *rpctype.CheckArgs, enabledSyscalls map[*pr
 	mgr.target.UpdateGlobs(a.GlobFiles)
 	mgr.loadCorpus()
 	mgr.firstConnect = time.Now()
+}
+
+func (mgr *Manager) newInvalidReason(errno uint32, log []byte) {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	logStringLines := strings.Split(string(log), "\n")
+	var reasonString string
+	if len(logStringLines) >= 3 {
+		reasonString = logStringLines[len(logStringLines)-3]
+	} else {
+		reasonString = "unknown reason strerrno: " + fmt.Sprint(errno)
+	}
+
+	if len(reasonString) > 100 {
+		reasonString = reasonString[0:100]
+	}
+	if strings.HasPrefix(reasonString, "math between map_value pointer and") {
+		reasonString = "math between map_value pointer and XX "
+	} else if strings.HasPrefix(reasonString, "invalid shift") {
+		reasonString = "invalid shift XX"
+	} else if strings.HasPrefix(reasonString, "jump out of range") {
+		reasonString = "jump out of range"
+	} else if strings.HasSuffix(reasonString, "!read_ok") {
+		reasonString = "RXX !read_ok"
+	} else if strings.HasSuffix(reasonString, "makes map_value pointer be out of bounds") {
+		reasonString = "Value XXX makes map_value pointer be out of bounds"
+	} else if strings.Contains(reasonString, "unreachable insn") {
+		reasonString = "unreachable insn XX"
+	} else if strings.Contains(reasonString, "back-edge from insn") {
+		reasonString = "back-edge from insn XX to XX"
+	}
+
+	if detail, ok := mgr.invalidReasons[reasonString]; ok {
+		detail.Count += 1
+		mgr.invalidReasons[reasonString] = detail
+	} else {
+		mgr.invalidReasons[reasonString] = rpctype.RPCInvalidReasonDetail{
+			Count: 1,
+			Log:   log,
+			Errno: errno,
+		}
+	}
+}
+
+func (mgr *Manager) newBPFCrash(name string, log []byte) {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	mgr.bpfCrashes = append(mgr.bpfCrashes, struct {
+		Name string
+		Log  []byte
+	}{
+		Name: name,
+		Log:  log,
+	})
 }
 
 func (mgr *Manager) newInput(inp rpctype.RPCInput, sign signal.Signal) bool {

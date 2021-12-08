@@ -301,6 +301,13 @@ func (proc *Proc) executeRaw(opts *ipc.ExecOpts, p *prog.Prog, stat Stat) *ipc.P
 			if err == prog.ErrBPFOOBRead ||
 				err == prog.ErrBPFOOBWrite ||
 				err == prog.ErrBPFLeak {
+				a := &rpctype.NewBPFCrashArgs{
+					Name: fmt.Sprint(err),
+					Log:  bytes.Trim(info.Calls[0].Log, "\x00"),
+				}
+				if err := proc.fuzzer.manager.Call("Manager.NewBPFCrash", a, nil); err != nil {
+					log.Fatalf("Manager.NewBPFCrash call failed: %v", err)
+				}
 				log.Fatalf("executor %v detected:%v", proc.pid, err)
 			}
 			if try > 10 {
@@ -310,6 +317,17 @@ func (proc *Proc) executeRaw(opts *ipc.ExecOpts, p *prog.Prog, stat Stat) *ipc.P
 			debug.FreeOSMemory()
 			time.Sleep(time.Second)
 			continue
+		}
+
+		// invalid reason
+		if info.Calls[0].Errno != 0 {
+			a := &rpctype.NewInvalidReasonArgs{
+				Errno: uint32(info.Calls[0].Errno),
+				Log:   bytes.Trim(info.Calls[0].Log, "\x00"),
+			}
+			if err := proc.fuzzer.manager.Call("Manager.NewInvalidReason", a, nil); err != nil {
+				log.Fatalf("Manager.NewInvalidReason call failed: %v", err)
+			}
 		}
 		log.Logf(2, "result hanged=%v: %s", hanged, output)
 		return info

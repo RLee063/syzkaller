@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -54,6 +55,9 @@ func (mgr *Manager) initHTTP() {
 	mux.HandleFunc("/funccover", mgr.httpFuncCover)
 	mux.HandleFunc("/filecover", mgr.httpFileCover)
 	mux.HandleFunc("/input", mgr.httpInput)
+	mux.HandleFunc("/invalid", mgr.httpInvalid)
+	mux.HandleFunc("/invaliddetail", mgr.httpInvalidDetail)
+	mux.HandleFunc("/bpfcrashes", mgr.httpBpfCrashes)
 	// Browsers like to request this, without special handler this goes to / handler.
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {})
 
@@ -124,7 +128,7 @@ func (mgr *Manager) collectStats() []UIStat {
 	rawStats := mgr.stats.all()
 	head := prog.GitRevisionBase
 	stats := []UIStat{
-		{Name: "revision", Value: fmt.Sprint(head[:8]), Link: vcs.LogLink(vcs.SyzkallerRepo, head)},
+		{Name: "revision", Value: fmt.Sprint(head), Link: vcs.LogLink(vcs.SyzkallerRepo, head)},
 		{Name: "config", Value: configName, Link: "/config"},
 		{Name: "uptime", Value: fmt.Sprint(time.Since(mgr.startTime) / 1e9 * 1e9)},
 		{Name: "fuzzing", Value: fmt.Sprint(mgr.fuzzingTime / 60e9 * 60e9)},
@@ -132,6 +136,9 @@ func (mgr *Manager) collectStats() []UIStat {
 		{Name: "triage queue", Value: fmt.Sprint(len(mgr.candidates))},
 		{Name: "signal", Value: fmt.Sprint(rawStats["signal"])},
 		{Name: "coverage", Value: fmt.Sprint(rawStats["coverage"]), Link: "/cover"},
+		{Name: "invalid reasons", Value: fmt.Sprint(len(mgr.invalidReasons)), Link: "/invalid"},
+		{Name: "valid rate", Value: fmt.Sprintf("%d / %d", rawStats["valid total"], rawStats["exec total"])},
+		{Name: "bpfcrashes", Value: fmt.Sprint(len(mgr.bpfCrashes)), Link: "/bpfcrashes"},
 	}
 	if mgr.coverFilter != nil {
 		stats = append(stats, UIStat{
@@ -190,6 +197,41 @@ func (mgr *Manager) httpCrash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	executeTemplate(w, crashTemplate, crash)
+}
+
+func (mgr *Manager) httpBpfCrashes(w http.ResponseWriter, r *http.Request) {
+	data := UIBPFCrashesData{}
+	for _, item := range mgr.bpfCrashes {
+		data.BPFCrashes = append(data.BPFCrashes, struct {
+			Name string
+			Log  string
+		}{
+			Name: item.Name,
+			Log:  string(item.Log),
+		})
+	}
+	executeTemplate(w, bpfcrashesTemplate, data)
+}
+
+func (mgr *Manager) httpInvalid(w http.ResponseWriter, r *http.Request) {
+	data := UIInvalidReasonData{}
+	for name, detail := range mgr.invalidReasons {
+		data.InvalidReasons = append(data.InvalidReasons, struct {
+			Name   string
+			Errno  uint32
+			Counts uint32
+		}{name, detail.Errno, detail.Count})
+	}
+	sort.SliceStable(data.InvalidReasons, func(i, j int) bool {
+		return data.InvalidReasons[i].Counts > data.InvalidReasons[j].Counts
+	})
+	executeTemplate(w, invalidTemplate, data)
+}
+
+func (mgr *Manager) httpInvalidDetail(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	log := mgr.invalidReasons[r.FormValue("name")].Log
+	w.Write(log)
 }
 
 func (mgr *Manager) httpCorpus(w http.ResponseWriter, r *http.Request) {
@@ -447,8 +489,43 @@ func (mgr *Manager) httpInput(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "can't find the input", http.StatusInternalServerError)
 		return
 	}
+	p, err := mgr.target.Deserialize(inp.Prog, prog.NonStrict)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to deserialize program: %v", err), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Write(inp.Prog)
+	w.Write(p.SerializeVerbose())
+	w.Write([]byte("\n"))
+
+	buf := p.SerializeHex()
+	buf_encode := hex.EncodeToString(buf)
+	w.Write([]byte(buf_encode))
+	w.Write([]byte("\n"))
+	w.Write([]byte("\n"))
+
+	file, err := ioutil.TempFile("/tmp", "bpf-insns*")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to create tmp file: %v", err), http.StatusInternalServerError)
+		return
+	}
+	file.Write(buf)
+	disasm := osutil.Command("ebpf-disasm", []string{"-r", file.Name()}...)
+	output, err := disasm.CombinedOutput()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to run ebpf-disasm: %v", err), http.StatusInternalServerError)
+		w.Write([]byte("\n"))
+		w.Write(output)
+		disasm2 := osutil.Command("ebpf-disasm", []string{"-c", "-r", file.Name()}...)
+		output, err = disasm2.CombinedOutput()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to run ebpf-disasm -c: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Write(output)
+		return
+	}
+	w.Write(output)
 }
 
 func (mgr *Manager) httpReport(w http.ResponseWriter, r *http.Request) {
@@ -638,6 +715,21 @@ func trimNewLines(data []byte) []byte {
 	return data
 }
 
+type UIInvalidReasonData struct {
+	InvalidReasons []struct {
+		Name   string
+		Errno  uint32
+		Counts uint32
+	}
+}
+
+type UIBPFCrashesData struct {
+	BPFCrashes []struct {
+		Name string
+		Log  string
+	}
+}
+
 type UISummaryData struct {
 	Name    string
 	Stats   []UIStat
@@ -816,6 +908,58 @@ Report: <a href="/report?id={{.ID}}">{{.Triaged}}</a>
 		</td>
 		<td class="time {{if not $c.Active}}inactive{{end}}">{{formatTime $c.Time}}</td>
 		<td class="tag {{if not $c.Active}}inactive{{end}}" title="{{$c.Tag}}">{{formatTagHash $c.Tag}}</td>
+	</tr>
+	{{end}}
+</table>
+</body></html>
+`)
+
+var bpfcrashesTemplate = html.CreatePage(`
+<!doctype html>
+<html>
+<head>
+	<title>syzkaller bpf crashes</title>
+	{{HEAD}}
+</head>
+<body>
+
+<table class="list_table">
+	<tr>
+		<th>Crash Name</th>
+		<th>BPF Log</th>
+	</tr>
+	{{range $item := $.BPFCrashes}}
+	<tr>
+		<td>{{$item.Name}}</td>
+		<td><pre class="txt">{{$item.Log}}</pre></td>
+	</tr>
+	{{end}}
+</table>
+</body></html>
+`)
+
+var invalidTemplate = html.CreatePage(`
+<!doctype html>
+<html>
+<head>
+	<title>syzkaller invalid reasons</title>
+	{{HEAD}}
+</head>
+<body>
+
+<table class="list_table">
+	<tr>
+		<th>Reason Name</th>
+		<th>Errno</th>
+		<th>Counts</th>
+		<th>Log</th>
+	</tr>
+	{{range $item := $.InvalidReasons}}
+	<tr>
+		<td>{{$item.Name}}</td>
+		<td>{{$item.Errno}}</td>
+		<td>{{$item.Counts}}</td>
+		<td><a href='/invaliddetail?name={{$item.Name}}'>view log detail</a></td>
 	</tr>
 	{{end}}
 </table>

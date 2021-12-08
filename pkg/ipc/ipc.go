@@ -91,6 +91,7 @@ type CallInfo struct {
 	Flags  CallFlags
 	Signal []uint32 // feedback signal, filled if FlagSignal is set
 	Cover  []uint32 // per-call coverage, filled if FlagSignal is set and cover == true,
+	Log    []byte
 	// if dedup == false, then cov effectively contains a trace, otherwise duplicates are removed
 	Comps prog.CompMap // per-call comparison operands
 	Errno int          // call errno (0 if the call was successful)
@@ -115,6 +116,8 @@ type Env struct {
 
 	StatExecs    uint64
 	StatRestarts uint64
+	StatValid    uint64
+	StatInvalid  uint64
 }
 
 const (
@@ -290,6 +293,11 @@ func (env *Env) Exec(opts *ExecOpts, p *prog.Prog) (output []byte, info *ProgInf
 	}
 	output, hanged, err0 = env.cmd.exec(opts, progData)
 	if err0 != nil {
+		if err0 == prog.ErrBPFOOBRead ||
+			err0 == prog.ErrBPFOOBWrite ||
+			err0 == prog.ErrBPFLeak {
+			info, _ = env.parseOutput(p)
+		}
 		env.cmd.close()
 		env.cmd = nil
 		return
@@ -357,6 +365,14 @@ func (env *Env) parseOutput(p *prog.Prog) (*ProgInfo, error) {
 			}
 			inf.Errno = int(reply.errno)
 			inf.Flags = CallFlags(reply.flags)
+			if reply.index == 321 {
+				if reply.errno == 0 {
+					atomic.AddUint64(&env.StatValid, 1)
+				} else {
+					atomic.AddUint64(&env.StatInvalid, 1)
+				}
+			}
+
 		} else {
 			extraParts = append(extraParts, CallInfo{})
 			inf = &extraParts[len(extraParts)-1]
@@ -374,6 +390,10 @@ func (env *Env) parseOutput(p *prog.Prog) (*ProgInfo, error) {
 			return nil, err
 		}
 		inf.Comps = comps
+		if inf.Log, ok = readCharArray(&out, reply.logSize); !ok {
+			return nil, fmt.Errorf("call %v/%v/%v: log overflow: %v/%v",
+				i, reply.index, reply.num, reply.logSize, len(out))
+		}
 	}
 	if len(extraParts) == 0 {
 		return info, nil
@@ -463,6 +483,19 @@ func readUint64(outp *[]byte) (uint64, bool) {
 	return v, true
 }
 
+func readCharArray(outp *[]byte, size uint32) ([]byte, bool) {
+	if size == 0 {
+		return nil, true
+	}
+	out := *outp
+	if int(size) > len(out) {
+		return nil, false
+	}
+	res := out[:size]
+	*outp = out[size:]
+	return res, true
+}
+
 func readUint32Array(outp *[]byte, size uint32) ([]uint32, bool) {
 	if size == 0 {
 		return nil, true
@@ -539,6 +572,7 @@ type callReply struct {
 	signalSize uint32
 	coverSize  uint32
 	compsSize  uint32
+	logSize    uint32
 	// signal/cover/comps follow
 }
 

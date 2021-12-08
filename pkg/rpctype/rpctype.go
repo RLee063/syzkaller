@@ -61,6 +61,22 @@ type SyscallReason struct {
 	Reason string
 }
 
+type NewBPFCrashArgs struct {
+	Name string
+	Log  []byte
+}
+
+type NewInvalidReasonArgs struct {
+	Errno uint32
+	Log   []byte
+}
+
+type RPCInvalidReasonDetail struct {
+	Errno uint32
+	Log   []byte
+	Count uint32
+}
+
 type NewInputArgs struct {
 	Name string
 	RPCInput

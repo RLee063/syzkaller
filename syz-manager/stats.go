@@ -21,6 +21,8 @@ type Stats struct {
 	newInputs           Stat
 	rotatedInputs       Stat
 	execTotal           Stat
+	validTotal          Stat
+	invalidTotal        Stat
 	hubSendProgAdd      Stat
 	hubSendProgDel      Stat
 	hubSendRepro        Stat
@@ -69,6 +71,8 @@ func (stats *Stats) all() map[string]uint64 {
 		"new inputs":        stats.newInputs.get(),
 		"rotated inputs":    stats.rotatedInputs.get(),
 		"exec total":        stats.execTotal.get(),
+		"valid total":       stats.validTotal.get(),
+		"invalid total":     stats.invalidTotal.get(),
 		"coverage":          stats.corpusCover.get(),
 		"filtered coverage": stats.corpusCoverFiltered.get(),
 		"signal":            stats.corpusSignal.get(),
@@ -101,6 +105,10 @@ func (stats *Stats) mergeNamed(named map[string]uint64) {
 		switch k {
 		case "exec total":
 			stats.execTotal.add(int(v))
+		case "valid total":
+			stats.validTotal.add(int(v))
+		case "invalid total":
+			stats.invalidTotal.add(int(v))
 		default:
 			stats.namedStats[k] += v
 		}
