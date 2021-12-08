@@ -74,6 +74,10 @@ const int kMaxArgs = 9;
 const int kCoverSize = 256 << 10;
 const int kFailStatus = 67;
 
+const int kBPFLeakStatus = 80;
+const int kBPFOOBReadStatus = 81;
+const int kBPFOOBWriteStatus = 82;
+
 // Logical error (e.g. invalid input program), use as an assert() alternative.
 // If such error happens 10+ times in a row, it will be detected as a bug by syz-fuzzer.
 // syz-fuzzer will fail and syz-manager will create a bug for this.
@@ -246,6 +250,7 @@ struct thread_t {
 	bool fault_injected;
 	cover_t cov;
 	bool soft_fail_state;
+	int  sys_nr;
 };
 
 static thread_t threads[kMaxThreads];
@@ -964,6 +969,17 @@ void handle_completion(thread_t* th)
 		write_extra_output();
 	}
 	th->executing = false;
+	if (th->sys_nr == __NR_bpf){
+		if (th->res < 0){
+			debug("[-] bpf syscall failed %s:\n", strerror(errno));
+		}else{
+			debug("[+] executed syscall succeed: %ld\n", th->res);
+			int res = ebpf_fuzzer_check(th->res);
+			if (res != 0){
+				doexit(res);
+			}
+		}
+	}
 	running--;
 	if (running < 0) {
 		// This fires periodically for the past 2 years (see issue #502).
@@ -1160,6 +1176,16 @@ void execute_call(thread_t* th)
 		cover_reset(&th->cov);
 	// For pseudo-syscalls and user-space functions NONFAILING can abort before assigning to th->res.
 	// Arrange for res = -1 and errno = EFAULT result for such case.
+	union bpf_attr* attrs;
+	if (call->sys_nr == __NR_bpf){
+		attrs = (union bpf_attr* )th->args[1];
+		if (reset_ebpf_maps() < 0){
+			fail("[-] reset maps error\n");
+		}else{
+			debug("[+] reset map succeeded\n");
+		}
+	}
+	th->sys_nr = call->sys_nr;
 	th->res = -1;
 	errno = EFAULT;
 	NONFAILING(th->res = execute_syscall(call, th->args));

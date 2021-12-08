@@ -297,6 +297,12 @@ func (proc *Proc) executeRaw(opts *ipc.ExecOpts, p *prog.Prog, stat Stat) *ipc.P
 				// This error is observed a lot on the seeded syz_mount_image calls.
 				return nil
 			}
+
+			if err == prog.ErrBPFOOBRead ||
+				err == prog.ErrBPFOOBWrite ||
+				err == prog.ErrBPFLeak {
+				log.Fatalf("executor %v detected:%v", proc.pid, err)
+			}
 			if try > 10 {
 				log.Fatalf("executor %v failed %v times:\n%v", proc.pid, try, err)
 			}
@@ -315,7 +321,7 @@ func (proc *Proc) logProgram(opts *ipc.ExecOpts, p *prog.Prog) {
 		return
 	}
 
-	data := p.Serialize()
+	data := p.SerializeVerbose()
 	strOpts := ""
 	if opts.Flags&ipc.FlagInjectFault != 0 {
 		strOpts = fmt.Sprintf(" (fault-call:%v fault-nth:%v)", opts.FaultCall, opts.FaultNth)

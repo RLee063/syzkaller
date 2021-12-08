@@ -57,6 +57,9 @@ const (
 )
 
 var ErrExecBufferTooSmall = errors.New("encodingexec: provided buffer is too small")
+var ErrBPFOOBRead = errors.New("ebpf oob read checked")
+var ErrBPFOOBWrite = errors.New("ebpf oob write checked")
+var ErrBPFLeak = errors.New("ebpf leak checked")
 
 // SerializeForExec serializes program p for execution by process pid into the provided buffer.
 // Returns number of bytes written to the buffer.

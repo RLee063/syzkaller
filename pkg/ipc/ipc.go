@@ -122,6 +122,9 @@ const (
 
 	statusFail = 67
 
+	statusBPFLeak     = 80
+	statusBPFOOBRead  = 81
+	statusBPFOOBWrite = 82
 	// Comparison types masks taken from KCOV headers.
 	compSizeMask  = 6
 	compSize8     = 6
@@ -828,6 +831,12 @@ func (c *command) exec(opts *ExecOpts, progData []byte) (output []byte, hanged b
 	// with fork server the top process can exit with statusFail if it wants special handling.
 	if exitStatus == statusFail {
 		err0 = fmt.Errorf("executor %v: exit status %d\n%s", c.pid, exitStatus, output)
+	} else if exitStatus == statusBPFOOBRead {
+		err0 = prog.ErrBPFOOBRead
+	} else if exitStatus == statusBPFOOBWrite {
+		err0 = prog.ErrBPFOOBWrite
+	} else if exitStatus == statusBPFLeak {
+		err0 = prog.ErrBPFLeak
 	}
 	return
 }

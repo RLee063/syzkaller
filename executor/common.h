@@ -695,8 +695,9 @@ static void loop(void)
 		if (WEXITSTATUS(status) == kFailStatus) {
 			errno = 0;
 			fail("child failed");
+		} else {
+			reply_execute(WEXITSTATUS(status));
 		}
-		reply_execute(0);
 #endif
 #if SYZ_EXECUTOR || SYZ_USE_TMP_DIR
 		remove_dir(cwdbuf);

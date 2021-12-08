@@ -231,6 +231,15 @@ func (inst *Instance) MonitorExecution(outc <-chan []byte, errc <-chan error,
 				bytes.Contains(mon.output[lastPos:], executingProgram2) {
 				lastExecuteTime = time.Now()
 			}
+			if bytes.Contains(mon.output[lastPos:], bpfOOBRead) {
+				return mon.createReport("bpf oob read error")
+			}
+			if bytes.Contains(mon.output[lastPos:], bpfOOBWrite) {
+				return mon.createReport("bpf oob write error")
+			}
+			if bytes.Contains(mon.output[lastPos:], bpfLeak) {
+				return mon.createReport("bpf leak error")
+			}
 			if reporter.ContainsCrash(mon.output[mon.matchPos:]) {
 				return mon.extractError("unknown error")
 			}
@@ -283,9 +292,9 @@ func (mon *monitor) extractError(defaultError string) *report.Report {
 	}
 	// Give it some time to finish writing the error message.
 	// But don't wait for "no output", we already waited enough.
-	if defaultError != noOutputCrash || diagWait {
-		mon.waitForOutput()
-	}
+	// if defaultError != noOutputCrash || diagWait {
+	// 	mon.waitForOutput()
+	// }
 	if bytes.Contains(mon.output, []byte(fuzzerPreemptedStr)) {
 		return nil
 	}
@@ -364,6 +373,10 @@ const (
 var (
 	executingProgram1 = []byte("executing program")  // syz-fuzzer output
 	executingProgram2 = []byte("executed programs:") // syz-execprog output
+
+	bpfOOBRead  = []byte("ebpf oob read checked")
+	bpfOOBWrite = []byte("ebpf oob write checked")
+	bpfLeak     = []byte("ebpf leak checked")
 
 	beforeContext = 1024 << 10
 	afterContext  = 128 << 10

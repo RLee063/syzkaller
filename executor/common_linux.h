@@ -4369,6 +4369,7 @@ static void kill_and_wait(int pid, int* status)
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "ebpf_fuzzer.h"
 
 #define SYZ_HAVE_SETUP_LOOP 1
 static void setup_loop()
@@ -4379,6 +4380,11 @@ static void setup_loop()
 #if SYZ_EXECUTOR || SYZ_NET_RESET
 	checkpoint_net_namespace();
 #endif
+	if (init_ebpf_fuzzer() < 0){
+		debug("[-] ebpf_fuzzer init error: %s\n", strerror(errno));
+		fail("init_ebpf_fuzzer failed!");
+	}
+
 }
 #endif
 
@@ -4398,6 +4404,11 @@ static void reset_loop()
 #if SYZ_EXECUTOR || SYZ_NET_RESET
 	reset_net_namespace();
 #endif
+	if (reset_ebpf_maps() < 0){
+		fail("[-] reset maps error\n");
+	}else{
+		debug("[+] reset map succeeded\n");
+	}
 }
 #endif
 
