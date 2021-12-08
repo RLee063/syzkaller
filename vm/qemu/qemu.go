@@ -137,6 +137,7 @@ var archConfigs = map[string]*archConfig{
 			"root=/dev/sda",
 			"console=ttyS0",
 		},
+		TargetDir: "/tmp",
 	},
 	"linux/386": {
 		Qemu:   "qemu-system-i386",
