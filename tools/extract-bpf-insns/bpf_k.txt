@@ -1,0 +1,334 @@
+include <uapi/linux/bpf.h>
+
+bpf$PROG_LOAD_K(cmd const[BPF_PROG_LOAD], arg ptr[in, bpf_prog_k], size len[arg])
+
+# ===== bpf_porg =====
+
+bpf_licenses_k = "GPL"
+bpf_prog_type_k = BPF_PROG_TYPE_SOCKET_FILTER
+
+bpf_prog_k{
+	type			flags[bpf_prog_type_k, int32]
+	ninsn			bytesize8[insns, int32]
+	insns			ptr64[in, bpf_instructions_k]
+	license			ptr64[in, string[bpf_licenses_k]]
+	loglev			const[2, int32]
+	logsize			len[log, int32]
+	log				ptr64[out, array[int8, 1000000]]
+	kern_version		const[0, int32]
+	flags			const[0, int32]
+	prog_name		array[const[0, int8], BPF_OBJ_NAME_LEN]
+	prog_ifindex		ifindex[opt]
+	expected_attach_type	const[0, int32]
+	btf_fd			const[0, int32]
+	func_info_rec_size	const[0, int32]
+	func_info		const[0, int64]
+	func_info_cnt		const[0, int32]
+	line_info_rec_size	const[0, int32]
+	line_info		const[0, int64]
+	line_info_cnt		const[0, int32]
+	attach_btf_id		const[0, int32]
+	attach_prog_fd		const[0, int32]
+}
+
+bpf_instructions_k [
+	framed	bpf_framed_program_k
+] [varlen]
+
+bpf_framed_program_k {
+	get_map_ptr_c	bpf_insn_get_map_ptr[CORRUPT_MAP_FD, CORRUPT_MAP_REG]
+	get_map_ptr_S	bpf_insn_get_map_ptr[STORAGE_MAP_FD, STORAGE_MAP_REG]
+	get_map_ptr_V	bpf_insn_get_map_ptr[VALUE_MAP_FD, VALUE_MAP_REG]
+	init 			array[init_src_reg, 10:20]
+	random_insns	array[bpf_insn_k, 0:50]
+    jmp_gap         array[BPF_MOV32_IMM[TMP_REG, 0], 10]
+	vul_start 		mark_start
+	try_vul 		vul_insns
+	vul_end 		mark_complete
+	exit			BPF_EXIT_INSN
+} [packed]
+
+type bpf_insn_get_map_ptr[FD, DST]{
+    i1  BPF_MOV64_IMM[BPF_REG_0, 0]
+    i2  BPF_STX_MEM[BPF_W0, BPF_REG_10, BPF_REG_0, -4]
+    i3  BPF_MOV64_REG[BPF_REG_2, BPF_REG_10]
+    i4  BPF_ALU64_IMM[BPF_ADD0, BPF_REG_2, -4]
+	i5  BPF_LD_MAP_FD[BPF_REG_1, FD]
+    i6  BPF_EMIT_CALL[0x1]
+    i7  BPF_JMP_IMM[BPF_JNE0, BPF_REG_0, 0, 1]
+    i8  BPF_EXIT_INSN
+    i9  BPF_MOV64_REG[DST, BPF_REG_0]
+    i10 BPF_MOV64_IMM[BPF_REG_0, 0]
+}[packed]
+
+# value_map don't know how to init XD
+# range_init 			bpf_init_reg_range
+init_src_reg[
+	const32_init64 		bpf_mov64_imm_t[flags[bpf_src_reg, int8:4], int32]
+	const32_init32 		bpf_mov32_imm_t[flags[bpf_src_reg, int8:4], int32]
+	cosnt64_init64		bpf_ld_imm64_raw_t[flags[bpf_src_reg, int8:4], const[0, int8:4], int32, int32]
+	unknown_init 		bpf_ldx_mem_t[flags[bpf_ldst_size, int8:2], flags[bpf_src_reg, int8:4], flags[bpf_map_reg, int8:4], int16[0:8192]]
+] [varlen]
+
+# bpf_init_reg_range {
+# 	i1 bpf_ldx_mem_t[const[BPF_DW0, int8:2], const[BPF_REG_0, int8:4], const[VALUE_MAP_REG, int8:4], const[0, int16]]
+# 	i2 bpf_mov32_imm_t[const[TMP_REG, int8:4], int32]
+# 	i3 bpf_jmp32_reg_t[flags[bpf_jmp_op_k, int8:4], const[BPF_REG_0, int8:4], const[TMP_REG, int8:4], const[1, int16]]
+# 	i4 BPF_EXIT_INSN
+# 	i8 bpf_mov64_reg_t[flags[bpf_src_reg, int8:4], const[BPF_REG_0, int8:4]]
+# } [packed]
+
+vul_insns[
+	leak 		try_leak
+	oob_read 	try_oob_read
+	oob_write 	try_oob_write
+] [varlen]
+
+try_leak{
+	i2 BPF_ALU64_REG[BPF_SUB0, CORRUPT_MAP_REG, EXPLOIT_REG]
+	i5 BPF_STX_MEM[BPF_DW0, STORAGE_MAP_REG, CORRUPT_MAP_REG, 0]
+} [packed]
+
+try_oob_read{
+    i2 BPF_ALU64_REG[BPF_SUB0, CORRUPT_MAP_REG, EXPLOIT_REG]
+    i3 BPF_LDX_MEM[BPF_DW0, TMP_REG, CORRUPT_MAP_REG, 0]
+    i4 BPF_STX_MEM[BPF_DW0, STORAGE_MAP_REG, TMP_REG, 0]
+}
+
+try_oob_write{
+	i2 BPF_ALU64_REG[BPF_SUB0, CORRUPT_MAP_REG, EXPLOIT_REG]
+    i3 BPF_LDX_MEM[BPF_DW0, TMP_REG, STORAGE_MAP_REG, 0]
+    i4 BPF_STX_MEM[BPF_DW0, CORRUPT_MAP_REG, TMP_REG, 0]
+}
+
+mark_start{
+	i1 BPF_MOV32_IMM[TMP_REG, 0xbabecafe]
+	i2 BPF_STX_MEM[BPF_W0, STORAGE_MAP_REG, TMP_REG, 0xc]
+}
+
+mark_complete{
+	i1 BPF_MOV32_IMM[TMP_REG, 0xdeadbeef]
+	i2 BPF_STX_MEM[BPF_W0, STORAGE_MAP_REG, TMP_REG, 8]
+}
+
+#   ld_abs	 	bpf_ld_abs
+bpf_insn_k [
+	ldx_mem		bpf_ldx_mem
+	ld_imm64 	bpf_ld_imm64
+
+	alu_move 	bpf_alu_move
+	alu_shift   bpf_alu_shift
+	alu64_reg 	bpf_alu64_reg
+	alu32_reg 	bpf_alu32_reg
+	alu64_imm 	bpf_alu64_imm
+	alu32_imm 	bpf_alu32_imm
+
+    jmp_reg     bpf_jmp_reg
+    jmp_imm     bpf_jmp_imm
+	jmp32_reg   bpf_jmp32_reg
+	jmp32_imm   bpf_jmp32_imm
+] [varlen]
+
+bpf_alu_shift [
+	reg64 bpf_alu_shift64_reg
+	reg32 bpf_alu_shift32_reg
+	imm64 bpf_alu_shift64_imm
+	imm32 bpf_alu_shift32_imm
+]
+
+bpf_alu_move [
+	mov64_reg 	bpf_mov64_reg
+	mov32_reg 	bpf_mov32_reg
+	mov64_imm	bpf_mov64_imm
+	mov32_imm	bpf_mov32_imm
+]
+
+# ===== defines =====
+define BPF_PSEUDO_MAP_FD 1
+
+define VALUE_MAP_SIZE 8192
+define VALUE_MAP_OFFSET VALUE_MAP_SIZE-8
+
+define CORRUPT_MAP_FD 100
+define STORAGE_MAP_FD 101
+define VALUE_MAP_FD   102
+
+define STORAGE_MAP_REG BPF_REG_9
+define CORRUPT_MAP_REG BPF_REG_8
+define VALUE_MAP_REG   BPF_REG_7
+define EXPLOIT_REG BPF_REG_6
+define TMP_REG 	BPF_REG_1
+
+define BPF_W0	BPF_W >> 3
+define BPF_H0	BPF_H >> 3
+define BPF_B0	BPF_B >> 3
+define BPF_DW0	BPF_DW >> 3
+
+define BPF_IMM0	BPF_IMM >> 5
+define BPF_ABS0	BPF_ABS >> 5
+define BPF_IND0	BPF_IND >> 5
+define BPF_MEM0	BPF_MEM >> 5
+define BPF_XADD0	BPF_XADD >> 5
+
+define BPF_ADD0	BPF_ADD >> 4
+define BPF_SUB0	BPF_SUB >> 4
+define BPF_MUL0	BPF_MUL >> 4
+define BPF_DIV0	BPF_DIV >> 4
+define BPF_OR0	BPF_OR >> 4
+define BPF_AND0	BPF_AND >> 4
+define BPF_LSH0	BPF_LSH >> 4
+define BPF_RSH0	BPF_RSH >> 4
+define BPF_NEG0	BPF_NEG >> 4
+define BPF_MOD0	BPF_MOD >> 4
+define BPF_XOR0	BPF_XOR >> 4
+define BPF_MOV0	BPF_MOV >> 4
+define BPF_ARSH0	BPF_ARSH >> 4
+define BPF_END0	BPF_END >> 4
+
+define BPF_JA0	BPF_JA >> 4
+define BPF_JEQ0	BPF_JEQ >> 4
+define BPF_JGT0	BPF_JGT >> 4
+define BPF_JGE0	BPF_JGE >> 4
+define BPF_JSET0	BPF_JSET >> 4
+define BPF_JNE0	BPF_JNE >> 4
+define BPF_JSGT0	BPF_JSGT >> 4
+define BPF_JSGE0	BPF_JSGE >> 4
+define BPF_CALL0	BPF_CALL >> 4
+define BPF_EXIT0	BPF_EXIT >> 4
+define BPF_JLT0	BPF_JLT >> 4
+define BPF_JLE0	BPF_JLE >> 4
+define BPF_JSLT0	BPF_JSLT >> 4
+define BPF_JSLE0	BPF_JSLE >> 4
+
+define BPF_K0 BPF_K >> 3
+define BPF_X0 BPF_X >> 3
+
+# ===== flags =====
+
+bpf_map_fd = VALUE_MAP_FD
+bpf_map_reg = VALUE_MAP_REG
+bpf_dst_reg = BPF_REG_2, BPF_REG_3, BPF_REG_4, BPF_REG_5, BPF_REG_6
+bpf_src_reg = BPF_REG0, BPF_REG_1, BPF_REG_2, BPF_REG_3, BPF_REG_4, BPF_REG_5, BPF_REG_6
+
+# BPF_NEG0
+bpf_alu_op_k = BPF_ADD0, BPF_SUB0, BPF_MUL0, BPF_DIV0, BPF_OR0, BPF_AND0, BPF_MOD0, BPF_XOR0, BPF_MOV0
+bpf_alu_shift_op_k = BPF_LSH0, BPF_RSH0, BPF_ARSH0
+
+# BPF_JA0
+bpf_jmp_op_k = BPF_JEQ0, BPF_JGT0, BPF_JGE0, BPF_JSET0, BPF_JNE0, BPF_JSGT0, BPF_JSGE0, BPF_JLT0, BPF_JLE0, BPF_JSLT0, BPF_JSLE0
+
+# ===== BPF_INSN_TEMPLATE =====
+# 314 or 323
+type bpf_insn_t_k[CLASS, SRC_SIZE, OP_MODE, DST, SRC, OFF, IMM] {
+	code_class	CLASS
+	code_ss		SRC_SIZE
+	code_o		OP_MODE
+	dst			DST
+	src			SRC
+	off			OFF
+	imm			IMM
+}
+
+# ===== BPF_INSNS (generated by extract-description.py) =====
+
+type bpf_alu_shift64_reg_t[OP, DST, SRC] bpf_insn_t_k[const[BPF_ALU64, int8:3], const[BPF_X0, int8:1], OP, DST, SRC, const[0, int16], const[0, int32]]
+type bpf_alu_shift64_reg bpf_alu_shift64_reg_t[flags[bpf_alu_shift_op_k, int8:4], flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4]]
+
+type bpf_alu_shift32_reg_t[OP, DST, SRC] bpf_insn_t_k[const[BPF_ALU, int8:3], const[BPF_X0, int8:1], OP, DST, SRC, const[0, int16], const[0, int32]]
+type bpf_alu_shift32_reg bpf_alu_shift32_reg_t[flags[bpf_alu_shift_op_k, int8:4], flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4]]
+
+type bpf_alu_shift64_imm_t[OP, DST, IMM] bpf_insn_t_k[const[BPF_ALU64, int8:3], const[BPF_K0, int8:1], OP, DST, const[0, int8:4], const[0, int16], IMM]
+type bpf_alu_shift64_imm bpf_alu_shift64_imm_t[flags[bpf_alu_shift_op_k, int8:4], flags[bpf_dst_reg, int8:4], int32[0:64]]
+
+type bpf_alu_shift32_imm_t[OP, DST, IMM] bpf_insn_t_k[const[BPF_ALU, int8:3], const[BPF_K0, int8:1], OP, DST, const[0, int8:4], const[0, int16], IMM]
+type bpf_alu_shift32_imm bpf_alu_shift32_imm_t[flags[bpf_alu_shift_op_k, int8:4], flags[bpf_dst_reg, int8:4], int32[0:32]]
+
+type bpf_alu64_reg_t[OP, DST, SRC] bpf_insn_t_k[const[BPF_ALU64, int8:3], const[BPF_X0, int8:1], OP, DST, SRC, const[0, int16], const[0, int32]]
+type bpf_alu64_reg bpf_alu64_reg_t[flags[bpf_alu_op_k, int8:4], flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4]]
+type BPF_ALU64_REG[OP, DST, SRC] bpf_alu64_reg_t[const[OP, int8:4], const[DST, int8:4], const[SRC, int8:4]] 
+
+type bpf_alu32_reg_t[OP, DST, SRC] bpf_insn_t_k[const[BPF_ALU, int8:3], const[BPF_X0, int8:1], OP, DST, SRC, const[0, int16], const[0, int32]]
+type bpf_alu32_reg bpf_alu32_reg_t[flags[bpf_alu_op_k, int8:4], flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4]]
+type BPF_ALU32_REG[OP, DST, SRC] bpf_alu32_reg_t[const[OP, int8:4], const[DST, int8:4], const[SRC, int8:4]] 
+
+type bpf_alu64_imm_t[OP, DST, IMM] bpf_insn_t_k[const[BPF_ALU64, int8:3], const[BPF_K0, int8:1], OP, DST, const[0, int8:4], const[0, int16], IMM]
+type bpf_alu64_imm bpf_alu64_imm_t[flags[bpf_alu_op_k, int8:4], flags[bpf_dst_reg, int8:4], int32]
+type BPF_ALU64_IMM[OP, DST, IMM] bpf_alu64_imm_t[const[OP, int8:4], const[DST, int8:4], const[IMM, int32]] 
+
+type bpf_alu32_imm_t[OP, DST, IMM] bpf_insn_t_k[const[BPF_ALU, int8:3], const[BPF_K0, int8:1], OP, DST, const[0, int8:4], const[0, int16], IMM]
+type bpf_alu32_imm bpf_alu32_imm_t[flags[bpf_alu_op_k, int8:4], flags[bpf_dst_reg, int8:4], int32]
+type BPF_ALU32_IMM[OP, DST, IMM] bpf_alu32_imm_t[const[OP, int8:4], const[DST, int8:4], const[IMM, int32]] 
+
+type bpf_mov64_reg_t[DST, SRC] bpf_insn_t_k[const[BPF_ALU64, int8:3], const[BPF_X0, int8:1], const[BPF_MOV0, int8:4], DST, SRC, const[0, int16], const[0, int32]]
+type bpf_mov64_reg bpf_mov64_reg_t[flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4]]
+type BPF_MOV64_REG[DST, SRC] bpf_mov64_reg_t[const[DST, int8:4], const[SRC, int8:4]] 
+
+type bpf_mov32_reg_t[DST, SRC] bpf_insn_t_k[const[BPF_ALU, int8:3], const[BPF_X0, int8:1], const[BPF_MOV0, int8:4], DST, SRC, const[0, int16], const[0, int32]]
+type bpf_mov32_reg bpf_mov32_reg_t[flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4]]
+type BPF_MOV32_REG[DST, SRC] bpf_mov32_reg_t[const[DST, int8:4], const[SRC, int8:4]] 
+
+type bpf_mov64_imm_t[DST, IMM] bpf_insn_t_k[const[BPF_ALU64, int8:3], const[BPF_K0, int8:1], const[BPF_MOV0, int8:4], DST, const[0, int8:4], const[0, int16], IMM]
+type bpf_mov64_imm bpf_mov64_imm_t[flags[bpf_dst_reg, int8:4], int32]
+type BPF_MOV64_IMM[DST, IMM] bpf_mov64_imm_t[const[DST, int8:4], const[IMM, int32]] 
+
+type bpf_mov32_imm_t[DST, IMM] bpf_insn_t_k[const[BPF_ALU, int8:3], const[BPF_K0, int8:1], const[BPF_MOV0, int8:4], DST, const[0, int8:4], const[0, int16], IMM]
+type bpf_mov32_imm bpf_mov32_imm_t[flags[bpf_dst_reg, int8:4], int32]
+type BPF_MOV32_IMM[DST, IMM] bpf_mov32_imm_t[const[DST, int8:4], const[IMM, int32]] 
+
+
+type BPF_LD_IMM64[DST, IMML, IMMH] BPF_LD_IMM64_RAW[DST, 0, IMML, IMMH]
+type bpf_ld_imm64 bpf_ld_imm64_raw_t[flags[bpf_dst_reg, int8:4], const[0, int8:4], int32, int32]
+
+type BPF_LD_MAP_FD[DST, MAP_FD] BPF_LD_IMM64_RAW[DST, BPF_PSEUDO_MAP_FD, MAP_FD, 0]
+type bpf_ld_map_fd bpf_ld_imm64_raw_t[flags[bpf_dst_reg, int8:4], const[BPF_PSEUDO_MAP_FD, int8:4], flags[bpf_map_fd, int32], const[0, int32]]
+
+type BPF_LD_IMM64_RAW[DST, SRC, IMML, IMMH] bpf_ld_imm64_raw_t[const[DST, int8:4], const[SRC, int8:4], const[IMML, int32], const[IMMH, int32]]
+type bpf_ld_imm64_raw  bpf_ld_imm64_raw_t[flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4], int32, int32]
+type bpf_ld_imm64_raw_t[DST, SRC, IMML, IMMH]{
+        low     bpf_insn_t_k[const[BPF_LD, int8:3], const[BPF_DW0, int8:2], const[BPF_IMM, int8:3], DST, SRC, const[0, int16], IMML]
+        high    bpf_insn_t_k[const[0, int8:3], const[0, int8:1], const[0, int8:4], const[0, int8:4], const[0, int8:4], const[0, int16], IMMH]
+} 
+
+type bpf_ld_abs_t[SIZE, IMM] bpf_insn_t_k[const[BPF_LD, int8:3], SIZE, const[BPF_ABS0, int8:3], const[0, int8:4], const[0, int8:4], const[0, int16], IMM]
+type bpf_ld_abs bpf_ld_abs_t[flags[bpf_ldst_size, int8:2], int32]
+type BPF_LD_ABS[SIZE, IMM] bpf_ld_abs_t[const[SIZE, int8:2], const[IMM, int32]] 
+
+type bpf_ldx_mem_t[SIZE, DST, SRC, OFF] bpf_insn_t_k[const[BPF_LDX, int8:3], SIZE, const[BPF_MEM0, int8:3], DST, SRC, OFF, const[0, int32]]
+type bpf_ldx_mem bpf_ldx_mem_t[flags[bpf_ldst_size, int8:2], flags[bpf_dst_reg, int8:4], flags[bpf_map_reg, int8:4], int16]
+type BPF_LDX_MEM[SIZE, DST, SRC, OFF] bpf_ldx_mem_t[const[SIZE, int8:2], const[DST, int8:4], const[SRC, int8:4], const[OFF, int16]] 
+
+type bpf_stx_mem_t[SIZE, DST, SRC, OFF] bpf_insn_t_k[const[BPF_STX, int8:3], SIZE, const[BPF_MEM0, int8:3], DST, SRC, OFF, const[0, int32]]
+type bpf_stx_mem bpf_stx_mem_t[flags[bpf_ldst_size, int8:2], flags[bpf_map_reg, int8:4], flags[bpf_src_reg, int8:4], int16]
+type BPF_STX_MEM[SIZE, DST, SRC, OFF] bpf_stx_mem_t[const[SIZE, int8:2], const[DST, int8:4], const[SRC, int8:4], const[OFF, int16]] 
+
+type bpf_stx_xadd_t[SIZE, DST, SRC, OFF] bpf_insn_t_k[const[BPF_STX, int8:3], SIZE, const[BPF_XADD0, int8:3], DST, SRC, OFF, const[0, int32]]
+type bpf_stx_xadd bpf_stx_xadd_t[flags[bpf_ldst_size, int8:2], flags[bpf_map_reg, int8:4], flags[bpf_src_reg, int8:4], int16]
+type BPF_STX_XADD[SIZE, DST, SRC, OFF] bpf_stx_xadd_t[const[SIZE, int8:2], const[DST, int8:4], const[SRC, int8:4], const[OFF, int16]] 
+
+type bpf_st_mem_t[SIZE, DST, OFF, IMM] bpf_insn_t_k[const[BPF_ST, int8:3], SIZE, const[BPF_MEM0, int8:3], DST, const[0, int8:4], OFF, IMM]
+type bpf_st_mem bpf_st_mem_t[flags[bpf_ldst_size, int8:2], flags[bpf_map_reg, int8:4], int16, int32]
+type BPF_ST_MEM[SIZE, DST, OFF, IMM] bpf_st_mem_t[const[SIZE, int8:2], const[DST, int8:4], const[OFF, int16], const[IMM, int32]] 
+
+type bpf_jmp_reg_t[OP, DST, SRC, OFF] bpf_insn_t_k[const[BPF_JMP, int8:3], const[BPF_X0, int8:1], OP, DST, SRC, OFF, const[0, int32]]
+type bpf_jmp_reg bpf_jmp_reg_t[flags[bpf_jmp_op_k, int8:4], flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4], int16[0:10]]
+type BPF_JMP_REG[OP, DST, SRC, OFF] bpf_jmp_reg_t[const[OP, int8:4], const[DST, int8:4], const[SRC, int8:4], const[OFF, int16]] 
+
+type bpf_jmp32_reg_t[OP, DST, SRC, OFF] bpf_insn_t_k[const[BPF_JMP32, int8:3], const[BPF_X0, int8:1], OP, DST, SRC, OFF, const[0, int32]]
+type bpf_jmp32_reg bpf_jmp32_reg_t[flags[bpf_jmp_op_k, int8:4], flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4], int16[0:10]]
+type BPF_JMP32_REG[OP, DST, SRC, OFF] bpf_jmp32_reg_t[const[OP, int8:4], const[DST, int8:4], const[SRC, int8:4], const[OFF, int16]] 
+
+type bpf_jmp_imm_t[OP, DST, IMM, OFF] bpf_insn_t_k[const[BPF_JMP, int8:3], const[BPF_K0, int8:1], OP, DST, const[0, int8:4], OFF, IMM]
+type bpf_jmp_imm bpf_jmp_imm_t[flags[bpf_jmp_op_k, int8:4], flags[bpf_dst_reg, int8:4], int32, int16[0:10]]
+type BPF_JMP_IMM[OP, DST, IMM, OFF] bpf_jmp_imm_t[const[OP, int8:4], const[DST, int8:4], const[IMM, int32], const[OFF, int16]] 
+
+type bpf_jmp32_imm_t[OP, DST, IMM, OFF] bpf_insn_t_k[const[BPF_JMP32, int8:3], const[BPF_K0, int8:1], OP, DST, const[0, int8:4], OFF, IMM]
+type bpf_jmp32_imm bpf_jmp32_imm_t[flags[bpf_jmp_op_k, int8:4], flags[bpf_dst_reg, int8:4], int32, int16[0:10]]
+type BPF_JMP32_IMM[OP, DST, IMM, OFF] bpf_jmp32_imm_t[const[OP, int8:4], const[DST, int8:4], const[IMM, int32], const[OFF, int16]] 
+
+
+type BPF_EXIT_INSN bpf_exit_insn
+type bpf_exit_insn bpf_insn_t_k[const[BPF_JMP, int8:3], const[0, int8:1], const[BPF_EXIT0, int8:4], const[0, int8:4], const[0, int8:4], const[0, int16], const[0, int32]]
+
+type bpf_emit_call_t[IMM] bpf_insn_t_k[const[BPF_JMP, int8:3], const[0, int8:1], const[BPF_CALL0, int8:4], const[0, int8:4], const[0, int8:4], const[0, int16], IMM]
+type bpf_emit_call bpf_emit_call_t[int32]
+type BPF_EMIT_CALL[IMM] bpf_emit_call_t[const[IMM, int32]]

@@ -145,6 +145,7 @@ descriptions:
 	$(MAKE) .descriptions
 
 .descriptions: sys/*/*.txt sys/*/*.const bin/syz-sysgen
+	bin/syz-extract -os linux -arch amd64 -sourcedir /home/k1ll3r/work_space/ebpf_learning/syzkaller_study/linux_next bpf_k.txt
 	bin/syz-sysgen
 	touch .descriptions
 
