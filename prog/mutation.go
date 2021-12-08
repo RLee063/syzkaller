@@ -35,18 +35,18 @@ func (p *Prog) Mutate(rs rand.Source, ncalls int, ct *ChoiceTable, corpus []*Pro
 	}
 	for stop, ok := false, false; !stop; stop = ok && len(p.Calls) != 0 && r.oneOf(3) {
 		switch {
-		case r.oneOf(5):
-			// Not all calls have anything squashable,
-			// so this has lower priority in reality.
-			ok = ctx.squashAny()
-		case r.nOutOf(1, 100):
-			ok = ctx.splice()
-		case r.nOutOf(20, 31):
-			ok = ctx.insertCall()
+		// case r.oneOf(5):
+		// 	// Not all calls have anything squashable,
+		// 	// so this has lower priority in reality.
+		// 	ok = ctx.squashAny()
+		// case r.nOutOf(1, 100):
+		// 	ok = ctx.splice()
+		// case r.nOutOf(20, 31):
+		// 	ok = ctx.insertCall()
 		case r.nOutOf(10, 11):
 			ok = ctx.mutateArg()
-		default:
-			ok = ctx.removeCall()
+			// default:
+			// 	ok = ctx.removeCall()
 		}
 	}
 	p.sanitizeFix()
@@ -281,7 +281,7 @@ func mutateAlignedInt(r *randGen, a *ConstArg, t *IntType) uint64 {
 }
 
 func (t *IntType) mutate(r *randGen, s *state, arg Arg, ctx ArgCtx) (calls []*Call, retry, preserve bool) {
-	if r.bin() {
+	if r.nOutOf(4, 5) {
 		return regenerate(r, s, arg)
 	}
 	a := arg.(*ConstArg)
@@ -296,9 +296,10 @@ func (t *IntType) mutate(r *randGen, s *state, arg Arg, ctx ArgCtx) (calls []*Ca
 
 func (t *FlagsType) mutate(r *randGen, s *state, arg Arg, ctx ArgCtx) (calls []*Call, retry, preserve bool) {
 	a := arg.(*ConstArg)
-	for oldVal := a.Val; oldVal == a.Val; {
-		a.Val = r.flags(t.Vals, t.BitMask, a.Val)
-	}
+	// for oldVal := a.Val; oldVal == a.Val; {
+	// 	a.Val = r.flags(t.Vals, t.BitMask, a.Val)
+	// }
+	a.Val = r.flags(t.Vals, t.BitMask, a.Val)
 	return
 }
 
@@ -418,16 +419,16 @@ func (t *ArrayType) mutate(r *randGen, s *state, arg Arg, ctx ArgCtx) (calls []*
 }
 
 func (t *PtrType) mutate(r *randGen, s *state, arg Arg, ctx ArgCtx) (calls []*Call, retry, preserve bool) {
-	a := arg.(*PointerArg)
-	if r.oneOf(1000) {
-		removeArg(a.Res)
-		index := r.rand(len(r.target.SpecialPointers))
-		newArg := MakeSpecialPointerArg(t, a.Dir(), index)
-		replaceArg(arg, newArg)
-		return
-	}
-	newArg := r.allocAddr(s, t, a.Dir(), a.Res.Size(), a.Res)
-	replaceArg(arg, newArg)
+	// a := arg.(*PointerArg)
+	// if r.oneOf(1000) {
+	// 	removeArg(a.Res)
+	// 	index := r.rand(len(r.target.SpecialPointers))
+	// 	newArg := MakeSpecialPointerArg(t, a.Dir(), index)
+	// 	replaceArg(arg, newArg)
+	// 	return
+	// }
+	// newArg := r.allocAddr(s, t, a.Dir(), a.Res.Size(), a.Res)
+	// replaceArg(arg, newArg)
 	return
 }
 
