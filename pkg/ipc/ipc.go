@@ -365,10 +365,12 @@ func (env *Env) parseOutput(p *prog.Prog) (*ProgInfo, error) {
 			}
 			inf.Errno = int(reply.errno)
 			inf.Flags = CallFlags(reply.flags)
-			if reply.errno == 0 {
-				atomic.AddUint64(&env.StatValid, 1)
-			} else {
-				atomic.AddUint64(&env.StatInvalid, 1)
+			if reply.index == 321 {
+				if reply.errno == 0 {
+					atomic.AddUint64(&env.StatValid, 1)
+				} else {
+					atomic.AddUint64(&env.StatInvalid, 1)
+				}
 			}
 		} else {
 			extraParts = append(extraParts, CallInfo{})
