@@ -60,7 +60,7 @@ func newProc(fuzzer *Fuzzer, pid int) (*Proc, error) {
 }
 
 func (proc *Proc) loop() {
-	generatePeriod := 100
+	generatePeriod := 1
 	if proc.fuzzer.config.Flags&ipc.FlagSignal == 0 {
 		// If we don't have real coverage signal, generate programs more frequently
 		// because fallback signal is weak.
@@ -69,16 +69,16 @@ func (proc *Proc) loop() {
 	for i := 0; ; i++ {
 		item := proc.fuzzer.workQueue.dequeue()
 		if item != nil {
-			switch item := item.(type) {
-			case *WorkTriage:
-				proc.triageInput(item)
-			case *WorkCandidate:
-				proc.execute(proc.execOpts, item.p, item.flags, StatCandidate)
-			case *WorkSmash:
-				proc.smashInput(item)
-			default:
-				log.Fatalf("unknown work type: %#v", item)
-			}
+			// switch item := item.(type) {
+			// case *WorkTriage:
+			// 	proc.triageInput(item)
+			// case *WorkCandidate:
+			// 	proc.execute(proc.execOpts, item.p, item.flags, StatCandidate)
+			// case *WorkSmash:
+			// 	proc.smashInput(item)
+			// default:
+			// 	log.Fatalf("unknown work type: %#v", item)
+			// }
 			continue
 		}
 
