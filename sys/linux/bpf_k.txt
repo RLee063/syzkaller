@@ -14,7 +14,7 @@ bpf_prog_k{
 	license			ptr64[in, string[bpf_licenses_k]]
 	loglev			const[2, int32]
 	logsize			len[log, int32]
-	log				ptr64[out, array[int8, 1000000]]
+	log				ptr64[out, array[int8, 1000]]
 	kern_version		const[0, int32]
 	flags			const[0, int32]
 	prog_name		array[const[0, int8], BPF_OBJ_NAME_LEN]
@@ -31,8 +31,10 @@ bpf_prog_k{
 	attach_prog_fd		const[0, int32]
 }
 
+# framed	bpf_framed_program_k
+
 bpf_instructions_k [
-	framed	bpf_framed_program_k
+	runtime bpf_runtime_check_frame
 ] [varlen]
 
 bpf_framed_program_k {
@@ -45,6 +47,19 @@ bpf_framed_program_k {
 	vul_start 		mark_start
 	try_vul 		vul_insns
 	vul_end 		mark_complete
+	exit			BPF_EXIT_INSN
+} [packed]
+
+# 
+# init  			zero_init_src_reg
+# 
+# get_map_ptr_V	bpf_insn_get_map_ptr[VALUE_MAP_FD, VALUE_MAP_REG]
+# jmp_gap         array[BPF_MOV32_IMM[TMP_REG, 0], 100]
+# init 	array[init_src_reg, 20:30]
+bpf_runtime_check_frame{
+	init 			init_src_reg
+	random_insns	array[bpf_insn_k, 500:500]
+	jmp_gap         array[BPF_MOV32_IMM[BPF_REG_0, 0], 2]
 	exit			BPF_EXIT_INSN
 } [packed]
 
@@ -63,12 +78,41 @@ type bpf_insn_get_map_ptr[FD, DST]{
 
 # value_map don't know how to init XD
 # range_init 			bpf_init_reg_range
-init_src_reg[
-	const32_init64 		bpf_mov64_imm_t[flags[bpf_src_reg, int8:4], int32]
-	const32_init32 		bpf_mov32_imm_t[flags[bpf_src_reg, int8:4], int32]
-	cosnt64_init64		bpf_ld_imm64_raw_t[flags[bpf_src_reg, int8:4], const[0, int8:4], int32, int32]
-	unknown_init 		bpf_ldx_mem_t[flags[bpf_ldst_size, int8:2], flags[bpf_src_reg, int8:4], flags[bpf_map_reg, int8:4], int16[0:8192]]
+# unknown_init 			bpf_ldx_mem_t[flags[bpf_ldst_size, int8:2], flags[bpf_src_reg, int8:4], flags[bpf_map_reg, int8:4], int16[0:8192]]
+# const32_init64 		bpf_mov64_imm_t[flags[bpf_src_reg, int8:4], int32]
+# const32_init32 		bpf_mov32_imm_t[flags[bpf_src_reg, int8:4], int32]
+# cosnt64_init64		bpf_ld_imm64_raw_t[flags[bpf_src_reg, int8:4], const[0, int8:4], int32, int32]
+
+type const32_init64[BPF_REG_A] 	bpf_mov64_imm_t[const[BPF_REG_A, int8:4], int32]
+type const32_init32[BPF_REG_A] 	bpf_mov32_imm_t[const[BPF_REG_A, int8:4], int32]
+type cosnt64_init64[BPF_REG_A]	bpf_ld_imm64_raw_t[const[BPF_REG_A, int8:4], const[0, int8:4], int32, int32]
+
+type init_src_reg_t[BPF_REG_A] [
+	c32_64	const32_init64[BPF_REG_A]
+	c32_32	const32_init32[BPF_REG_A]
+	c64_c64	cosnt64_init64[BPF_REG_A]
 ] [varlen]
+
+type unknown_init_src_reg_t[BPF_REG_A] bpf_ldx_mem_t[flags[bpf_ldst_size, int8:2], const[BPF_REG_A, int8:4], const[STORAGE_MAP_REG, int8:4], const[0, int16]]
+
+	# init_r0	init_src_reg_t[BPF_REG_0]
+	# init_r1	init_src_reg_t[BPF_REG_1]
+	# init_r2	init_src_reg_t[BPF_REG_2]
+	# init_r3	init_src_reg_t[BPF_REG_3]
+	# init_r4	init_src_reg_t[BPF_REG_4]
+	# init_r5	init_src_reg_t[BPF_REG_5]
+	# init_r6	init_src_reg_t[BPF_REG_6]
+
+init_src_reg{
+	get_map_ptr_S	bpf_insn_get_map_ptr[STORAGE_MAP_FD, STORAGE_MAP_REG]
+	init_r0	unknown_init_src_reg_t[BPF_REG_0]
+	init_r1	unknown_init_src_reg_t[BPF_REG_1]
+	init_r2	unknown_init_src_reg_t[BPF_REG_2]
+	init_r3	unknown_init_src_reg_t[BPF_REG_3]
+	init_r4	unknown_init_src_reg_t[BPF_REG_4]
+	init_r5	unknown_init_src_reg_t[BPF_REG_5]
+	init_r6	unknown_init_src_reg_t[BPF_REG_6]
+}[packed]
 
 # bpf_init_reg_range {
 # 	i1 bpf_ldx_mem_t[const[BPF_DW0, int8:2], const[BPF_REG_0, int8:4], const[VALUE_MAP_REG, int8:4], const[0, int16]]
@@ -93,40 +137,87 @@ try_oob_read{
     i2 BPF_ALU64_REG[BPF_SUB0, CORRUPT_MAP_REG, EXPLOIT_REG]
     i3 BPF_LDX_MEM[BPF_DW0, TMP_REG, CORRUPT_MAP_REG, 0]
     i4 BPF_STX_MEM[BPF_DW0, STORAGE_MAP_REG, TMP_REG, 0]
-}
+} [packed]
 
 try_oob_write{
 	i2 BPF_ALU64_REG[BPF_SUB0, CORRUPT_MAP_REG, EXPLOIT_REG]
     i3 BPF_LDX_MEM[BPF_DW0, TMP_REG, STORAGE_MAP_REG, 0]
     i4 BPF_STX_MEM[BPF_DW0, CORRUPT_MAP_REG, TMP_REG, 0]
-}
+} [packed]
 
 mark_start{
 	i1 BPF_MOV32_IMM[TMP_REG, 0xbabecafe]
 	i2 BPF_STX_MEM[BPF_W0, STORAGE_MAP_REG, TMP_REG, 0xc]
-}
+} [packed]
 
 mark_complete{
 	i1 BPF_MOV32_IMM[TMP_REG, 0xdeadbeef]
 	i2 BPF_STX_MEM[BPF_W0, STORAGE_MAP_REG, TMP_REG, 8]
-}
+} [packed]
 
-#   ld_abs	 	bpf_ld_abs
+# ld_abs	 	bpf_ld_abs
+# ldx_mem		bpf_ldx_mem
+
 bpf_insn_k [
-	ldx_mem		bpf_ldx_mem
-	ld_imm64 	bpf_ld_imm64
+	move 		bpf_move_insns
+	alu0 		bpf_alu_insns
+	alu1 		bpf_alu_insns
+	alu2 		bpf_alu_insns
+	alu3 		bpf_alu_insns
+	alu4 		bpf_alu_insns
+	alu5 		bpf_alu_insns
+	alu6 		bpf_alu_insns
+	alu7 		bpf_alu_insns
+	alu8 		bpf_alu_insns
+	alu9 		bpf_alu_insns
+	alu10 		bpf_alu_insns
+	alu11 		bpf_alu_insns
+	alu12 		bpf_alu_insns
+	alu13 		bpf_alu_insns
+	alu14 		bpf_alu_insns
+	alu15 		bpf_alu_insns
+	alu16 		bpf_alu_insns
+	alu17 		bpf_alu_insns
+	alu18 		bpf_alu_insns
+	alu19 		bpf_alu_insns
+	alu20 		bpf_alu_insns
+	alu21 		bpf_alu_insns
+	alu22 		bpf_alu_insns
+	alu23 		bpf_alu_insns
+	alu24 		bpf_alu_insns
+	alu25 		bpf_alu_insns
+	alu26 		bpf_alu_insns
+	alu27 		bpf_alu_insns
+	alu28 		bpf_alu_insns
+	alu29 		bpf_alu_insns
+	jmp			bpf_jmp_exit_insns
+] [varlen]
 
-	alu_move 	bpf_alu_move
-	alu_shift   bpf_alu_shift
-	alu64_reg 	bpf_alu64_reg
-	alu32_reg 	bpf_alu32_reg
-	alu64_imm 	bpf_alu64_imm
-	alu32_imm 	bpf_alu32_imm
+bpf_jmp_exit_insns{
+	jmp			bpf_jmp_insns_ONE
+	exit 		BPF_EXIT_INSN	
+} [packed]
 
-    jmp_reg     bpf_jmp_reg
+bpf_jmp_insns_ONE [
+	jmp_reg     bpf_jmp_reg_t[flags[bpf_jmp_op_k, int8:4], flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4], const[1, int16]]
+    jmp_imm     bpf_jmp_imm_t[flags[bpf_jmp_op_k, int8:4], flags[bpf_dst_reg, int8:4], int32, const[1, int16]]
+	jmp32_reg   bpf_jmp32_reg_t[flags[bpf_jmp_op_k, int8:4], flags[bpf_dst_reg, int8:4], flags[bpf_src_reg, int8:4], const[1, int16]]
+	jmp32_imm   bpf_jmp32_imm_t[flags[bpf_jmp_op_k, int8:4], flags[bpf_dst_reg, int8:4], int32, const[1, int16]]
+] [varlen]
+
+bpf_jmp_insns [
+	jmp_reg     bpf_jmp_reg
     jmp_imm     bpf_jmp_imm
 	jmp32_reg   bpf_jmp32_reg
 	jmp32_imm   bpf_jmp32_imm
+] [varlen]
+
+bpf_alu_insns [
+	alu64_reg 	bpf_alu64_reg
+	alu32_reg 	bpf_alu32_reg
+	alu64_imm 	bpf_alu64_imm
+	alu32_imm 	bpf_alu32_imm	
+	alu_shift   bpf_alu_shift
 ] [varlen]
 
 bpf_alu_shift [
@@ -134,14 +225,19 @@ bpf_alu_shift [
 	reg32 bpf_alu_shift32_reg
 	imm64 bpf_alu_shift64_imm
 	imm32 bpf_alu_shift32_imm
-]
+] [varlen]
 
-bpf_alu_move [
+bpf_move_insns [
 	mov64_reg 	bpf_mov64_reg
 	mov32_reg 	bpf_mov32_reg
 	mov64_imm	bpf_mov64_imm
 	mov32_imm	bpf_mov32_imm
-]
+	ld_imm64 	bpf_ld_imm64
+	unknown_init1 bpf_ldx_mem_t[flags[bpf_ldst_size, int8:2], flags[bpf_src_reg, int8:4], const[STORAGE_MAP_REG, int8:4], const[0, int16]]
+	unknown_init2 bpf_ldx_mem_t[flags[bpf_ldst_size, int8:2], flags[bpf_src_reg, int8:4], const[STORAGE_MAP_REG, int8:4], const[0, int16]]
+	unknown_init3 bpf_ldx_mem_t[flags[bpf_ldst_size, int8:2], flags[bpf_src_reg, int8:4], const[STORAGE_MAP_REG, int8:4], const[0, int16]]
+	unknown_init4 bpf_ldx_mem_t[flags[bpf_ldst_size, int8:2], flags[bpf_src_reg, int8:4], const[STORAGE_MAP_REG, int8:4], const[0, int16]]
+] [varlen]
 
 # ===== defines =====
 define BPF_PSEUDO_MAP_FD 1
@@ -208,7 +304,7 @@ define BPF_X0 BPF_X >> 3
 bpf_map_fd = VALUE_MAP_FD
 bpf_map_reg = VALUE_MAP_REG
 bpf_dst_reg = BPF_REG_2, BPF_REG_3, BPF_REG_4, BPF_REG_5, BPF_REG_6
-bpf_src_reg = BPF_REG0, BPF_REG_1, BPF_REG_2, BPF_REG_3, BPF_REG_4, BPF_REG_5, BPF_REG_6
+bpf_src_reg = BPF_REG_0, BPF_REG_1, BPF_REG_2, BPF_REG_3, BPF_REG_4, BPF_REG_5, BPF_REG_6
 
 # BPF_NEG0
 bpf_alu_op_k = BPF_ADD0, BPF_SUB0, BPF_MUL0, BPF_DIV0, BPF_OR0, BPF_AND0, BPF_MOD0, BPF_XOR0, BPF_MOV0
