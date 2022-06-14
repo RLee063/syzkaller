@@ -407,6 +407,7 @@ func (mgr *Manager) vmLoop() {
 					pendingRepro[res.crash] = true
 				}
 			}
+			// shutdown = nil
 		case res := <-reproDone:
 			atomic.AddUint32(&mgr.numReproducing, ^uint32(0))
 			crepro := false
@@ -1142,7 +1143,9 @@ func (mgr *Manager) newInvalidReason(errno uint32, log []byte) {
 	} else if strings.Contains(reasonString, "back-edge from insn") {
 		reasonString = "back-edge from insn XX to XX"
 	}
-
+	if errno == 999 {
+		reasonString = "unknown reason 999"
+	}
 	if detail, ok := mgr.invalidReasons[reasonString]; ok {
 		detail.Count += 1
 		mgr.invalidReasons[reasonString] = detail
