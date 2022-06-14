@@ -131,7 +131,8 @@ else
 	mkdir -p ./bin/$(TARGETOS)_$(TARGETARCH)
 	$(CC) -ggdb -o ./bin/$(TARGETOS)_$(TARGETARCH)/syz-executor$(EXE) executor/executor.cc \
 		$(ADDCFLAGS) $(CFLAGS) -DGOOS_$(TARGETOS)=1 -DGOARCH_$(TARGETARCH)=1 \
-		-DHOSTGOOS_$(HOSTOS)=1 -DGIT_REVISION=\"$(REV)\"
+		-DHOSTGOOS_$(HOSTOS)=1 -DGIT_REVISION=\"$(REV)\" \
+		-Wno-unused-function
 endif
 endif
 endif
