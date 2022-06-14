@@ -389,8 +389,15 @@ static void setup_features(char** enable, int n);
 
 #include "test.h"
 
+#define GLOBAL_LOG_BUF_LEN 0x8000000
+char *global_log_buf;
+
 int main(int argc, char** argv)
 {
+	global_log_buf = (char *)mmap(0, GLOBAL_LOG_BUF_LEN, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+	if (global_log_buf == MAP_FAILED){
+		return -1;
+	}
 	if (argc == 2 && strcmp(argv[1], "version") == 0) {
 		puts(GOOS " " GOARCH " " SYZ_REVISION " " GIT_REVISION);
 		return 0;
@@ -399,22 +406,22 @@ int main(int argc, char** argv)
 		setup_features(argv + 2, argc - 2);
 		return 0;
 	}
-	if (argc >= 2 && strcmp(argv[1], "leak") == 0) {
-#if SYZ_HAVE_LEAK_CHECK
-		check_leaks(argv + 2, argc - 2);
-#else
-		fail("leak checking is not implemented");
-#endif
-		return 0;
-	}
-	if (argc >= 2 && strcmp(argv[1], "setup_kcsan_filterlist") == 0) {
-#if SYZ_HAVE_KCSAN
-		setup_kcsan_filterlist(argv + 2, argc - 2, true);
-#else
-		fail("KCSAN is not implemented");
-#endif
-		return 0;
-	}
+// 	if (argc >= 2 && strcmp(argv[1], "leak") == 0) {
+// #if SYZ_HAVE_LEAK_CHECK
+// 		check_leaks(argv + 2, argc - 2);
+// #else
+// 		fail("leak checking is not implemented");
+// #endif
+// 		return 0;
+// 	}
+// 	if (argc >= 2 && strcmp(argv[1], "setup_kcsan_filterlist") == 0) {
+// #if SYZ_HAVE_KCSAN
+// 		setup_kcsan_filterlist(argv + 2, argc - 2, true);
+// #else
+// 		fail("KCSAN is not implemented");
+// #endif
+// 		return 0;
+// 	}
 	if (argc == 2 && strcmp(argv[1], "test") == 0)
 		return run_tests();
 
@@ -481,18 +488,18 @@ int main(int argc, char** argv)
 	int status = 0;
 	if (flag_sandbox_none)
 		status = do_sandbox_none();
-#if SYZ_HAVE_SANDBOX_SETUID
-	else if (flag_sandbox_setuid)
-		status = do_sandbox_setuid();
-#endif
-#if SYZ_HAVE_SANDBOX_NAMESPACE
-	else if (flag_sandbox_namespace)
-		status = do_sandbox_namespace();
-#endif
-#if SYZ_HAVE_SANDBOX_ANDROID
-	else if (flag_sandbox_android)
-		status = do_sandbox_android();
-#endif
+// #if SYZ_HAVE_SANDBOX_SETUID
+// 	else if (flag_sandbox_setuid)
+// 		status = do_sandbox_setuid();
+// #endif
+// #if SYZ_HAVE_SANDBOX_NAMESPACE
+// 	else if (flag_sandbox_namespace)
+// 		status = do_sandbox_namespace();
+// #endif
+// #if SYZ_HAVE_SANDBOX_ANDROID
+// 	else if (flag_sandbox_android)
+// 		status = do_sandbox_android();
+// #endif
 	else
 		fail("unknown sandbox type");
 
@@ -666,7 +673,7 @@ void execute_one()
 #endif
 	uint64 start = current_time_ms();
 
-retry:
+// retry:
 	uint64* input_pos = (uint64*)input_data;
 
 	if (flag_coverage && !colliding) {
@@ -867,11 +874,11 @@ retry:
 		}
 	}
 
-	if (flag_collide && !flag_fault && !colliding && !collide) {
-		debug("enabling collider\n");
-		collide = colliding = true;
-		goto retry;
-	}
+	// if (flag_collide && !flag_fault && !colliding && !collide) {
+	// 	debug("enabling collider\n");
+	// 	collide = colliding = true;
+	// 	goto retry;
+	// }
 }
 
 thread_t* schedule_call(int call_index, int call_num, bool colliding, uint64 copyout_index, uint64 num_args, uint64* args, uint64* pos)
@@ -1191,17 +1198,23 @@ void execute_call(thread_t* th)
 	union bpf_attr* attrs;
 	if (call->sys_nr == __NR_bpf){
 		attrs = (union bpf_attr* )th->args[1];
+		debug("[+] before %p %p\n", (void*)attrs->log_buf, (void*)attrs->insns);
+		attrs->log_buf = (size_t)global_log_buf;
+		attrs->log_size = GLOBAL_LOG_BUF_LEN;
 		th->log_buf = (char *)attrs->log_buf;
 		if (reset_ebpf_maps() < 0){
 			fail("[-] reset maps error\n");
 		}else{
 			debug("[+] reset map succeeded\n");
 		}
+		debug("[+] after %p %p\n", (void*)attrs->log_buf, (void*)attrs->insns);
 	}
 	th->sys_nr = call->sys_nr;
 	th->res = -1;
 	errno = EFAULT;
 	NONFAILING(th->res = execute_syscall(call, th->args));
+
+	debug("%s", th->log_buf);
 	th->reserrno = errno;
 	// Our pseudo-syscalls may misbehave.
 	if ((th->res == -1 && th->reserrno == 0) || call->attrs.ignore_return)

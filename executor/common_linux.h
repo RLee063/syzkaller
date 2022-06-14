@@ -3759,29 +3759,29 @@ static int do_sandbox_none(void)
 		return wait_for_loop(pid);
 
 	setup_common();
-#if SYZ_EXECUTOR || SYZ_VHCI_INJECTION
-	initialize_vhci();
-#endif
+// #if SYZ_EXECUTOR || SYZ_VHCI_INJECTION
+// 	initialize_vhci();
+// #endif
 	sandbox_common();
 	drop_caps();
-#if SYZ_EXECUTOR || SYZ_NET_DEVICES
-	initialize_netdevices_init();
-#endif
+// #if SYZ_EXECUTOR || SYZ_NET_DEVICES
+// 	initialize_netdevices_init();
+// #endif
 	if (unshare(CLONE_NEWNET)) {
 		debug("unshare(CLONE_NEWNET): %d\n", errno);
 	}
-#if SYZ_EXECUTOR || SYZ_DEVLINK_PCI
-	initialize_devlink_pci();
-#endif
-#if SYZ_EXECUTOR || SYZ_NET_INJECTION
-	initialize_tun();
-#endif
-#if SYZ_EXECUTOR || SYZ_NET_DEVICES
-	initialize_netdevices();
-#endif
-#if SYZ_EXECUTOR || SYZ_WIFI
-	initialize_wifi_devices();
-#endif
+// #if SYZ_EXECUTOR || SYZ_DEVLINK_PCI
+// 	initialize_devlink_pci();
+// #endif
+// #if SYZ_EXECUTOR || SYZ_NET_INJECTION
+// 	initialize_tun();
+// #endif
+// #if SYZ_EXECUTOR || SYZ_NET_DEVICES
+// 	initialize_netdevices();
+// #endif
+// #if SYZ_EXECUTOR || SYZ_WIFI
+// 	initialize_wifi_devices();
+// #endif
 	loop();
 	doexit(1);
 }

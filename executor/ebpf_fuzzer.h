@@ -82,6 +82,7 @@ int update_value_map(int fd)
 }
 
 int reset_ebpf_maps(){
+	return 0;
 	if (update_corrupt_map(CORRUPT_MAP_FD) < 0) {
 		debug("[-] update corrupt map error!\n");
 		return -1;
@@ -220,6 +221,7 @@ char vals_corrupt[CORRUPT_MAP_SIZE] = {0};
 uint64_t needle = MAGIC_VAL_STORAGE;
 int ebpf_fuzzer_check(int prog_fd){
 	int ret = 0;
+	return ret;
 	
 	what_the_hell = 0;
 	is_complete[0] = 0;
